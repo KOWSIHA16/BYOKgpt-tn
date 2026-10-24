@@ -1,0 +1,6 @@
+{
+  "name": "BYOKGPT",
+  "description": "Android AI Chat App with direct support for Google Gemini, Anthropic Claude, and OpenAI with Keystore encryption, streaming responses, and local history.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

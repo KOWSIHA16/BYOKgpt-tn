@@ -1,0 +1,92 @@
+<resources>
+    <string name="app_name">BYOKGPT</string>
+    <string name="app_subtitle">Bring Your Own Key AI Chat</string>
+    
+    <!-- Actions & Common -->
+    <string name="send">Send</string>
+    <string name="stop">Stop</string>
+    <string name="retry">Retry</string>
+    <string name="copy">Copy</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="clear">Clear</string>
+    <string name="test_connection">Test Key</string>
+    <string name="testing">Testing…</string>
+    <string name="connection_success">Connection successful!</string>
+    <string name="connection_failed">Connection failed</string>
+    <string name="new_chat">New Chat</string>
+    
+    <!-- Chat Screen -->
+    <string name="chat_input_hint">Ask BYOKGPT anything…</string>
+    <string name="thinking">Thinking…</string>
+    <string name="welcome_title">Welcome to BYOKGPT</string>
+    <string name="welcome_subtitle">Direct, privacy-first AI chat with your own API keys for Google Gemini, Claude, and OpenAI.</string>
+    <string name="setup_key_banner_title">Setup your API Key</string>
+    <string name="setup_key_banner_desc">Bring your own key to get started. Stored securely on-device with Android Keystore.</string>
+    <string name="setup_key_button">Configure Key</string>
+    
+    <!-- Provider & Models -->
+    <string name="provider_gemini">Google Gemini</string>
+    <string name="provider_claude">Anthropic Claude</string>
+    <string name="provider_openai">OpenAI ChatGPT</string>
+    <string name="select_provider">Select Provider</string>
+    <string name="select_model">Select Model</string>
+    <string name="api_key_label">API Key</string>
+    <string name="api_key_hint">Paste your %1$s API Key</string>
+    <string name="custom_endpoint_label">Custom Endpoint (Optional)</string>
+    <string name="custom_endpoint_hint">https://api.openai.com/v1</string>
+    
+    <!-- Settings Sections -->
+    <string name="settings_title">Settings</string>
+    <string name="sec_providers_keys">AI Providers &amp; API Keys</string>
+    <string name="sec_providers_keys_desc">Manage API credentials, test connections &amp; endpoints</string>
+    
+    <string name="sec_personalization">AI Personalization</string>
+    <string name="sec_personalization_desc">Custom instructions &amp; persona definition</string>
+    
+    <string name="sec_memory">Memory &amp; Context</string>
+    <string name="sec_memory_desc">Review stored memories and summaries</string>
+    
+    <string name="sec_appearance">Appearance</string>
+    <string name="sec_appearance_desc">Theme mode and accent colors</string>
+    
+    <string name="sec_general">General</string>
+    <string name="sec_general_desc">User nickname and language</string>
+    
+    <string name="sec_intelligence">Intelligence</string>
+    <string name="sec_intelligence_desc">Visual answers, fast mode, and search</string>
+    
+    <string name="sec_storage">Storage</string>
+    <string name="sec_storage_desc">Manage cache and database usage</string>
+    
+    <string name="sec_history_data">History &amp; Data</string>
+    <string name="sec_history_data_desc">Export chats, purge logs, or backup</string>
+    
+    <string name="sec_security">App Lock &amp; Security</string>
+    <string name="sec_security_desc">PIN lock, biometric check, and Keystore status</string>
+    
+    <string name="sec_about">About BYOKGPT</string>
+    <string name="sec_about_desc">Version, developer details &amp; communities</string>
+    
+    <!-- About & Community -->
+    <string name="about_app_desc">BYOKGPT is a transparent, direct client for leading AI language models. No middleman backend, no tracking, pure on-device Keystore encryption.</string>
+    <string name="community_section_title">Community &amp; Developer</string>
+    
+    <string name="comm_whatsapp_title">WhatsApp Community</string>
+    <string name="comm_whatsapp_desc">Join our official WhatsApp group for updates and community discussions</string>
+    
+    <string name="comm_telegram_title">Telegram Community</string>
+    <string name="comm_telegram_desc">Join the Telegram channel for fast support, announcements, and feedback</string>
+    
+    <string name="comm_github_title">Developer GitHub</string>
+    <string name="comm_github_desc">Visit @doradev26-tn on GitHub for source code and contributions</string>
+
+    <!-- Errors -->
+    <string name="error_no_key">Please configure an API key for %1$s to send messages.</string>
+    <string name="error_network">Network error. Please check your internet connection.</string>
+    <string name="error_invalid_key">The provided API key is invalid or unauthorized.</string>
+    <string name="error_rate_limit">Rate limit or quota exceeded. Please check your billing or try again later.</string>
+    <string name="error_general">Error: %1$s</string>
+</resources>
