@@ -57,7 +57,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _appMode = MutableStateFlow(AppMode.AI)
     val appMode: StateFlow<AppMode> = _appMode.asStateFlow()
 
-    private val _currentBrowserUrl = MutableStateFlow("https://www.google.com")
+    private val _currentBrowserUrl = MutableStateFlow("")
     val currentBrowserUrl: StateFlow<String> = _currentBrowserUrl.asStateFlow()
 
     val browserBookmarks: StateFlow<List<BrowserBookmarkEntity>> = repository.getAllBookmarks()

@@ -8,11 +8,13 @@ import android.net.http.SslError
 import android.os.Build
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -46,6 +48,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -121,13 +125,17 @@ fun ByokBrowserView(
     var sslErrorToConfirm by remember { mutableStateOf<Pair<SslErrorHandler, String>?>(null) }
 
     val isBookmarked = remember(bookmarks, currentLoadedUrl) {
-        bookmarks.any { it.url == currentLoadedUrl }
+        if (currentLoadedUrl.isBlank()) false
+        else bookmarks.any { it.url == currentLoadedUrl }
     }
 
     // Handle system back navigation inside browser
     BackHandler {
         if (webViewInstance?.canGoBack() == true) {
             webViewInstance?.goBack()
+        } else if (currentLoadedUrl.isNotBlank()) {
+            currentLoadedUrl = ""
+            currentTitle = ""
         } else {
             onReturnToAi()
         }
@@ -135,10 +143,12 @@ fun ByokBrowserView(
 
     // When targetUrl changes from outside (e.g. user sends new query or taps link), navigate
     LaunchedEffect(targetUrl) {
-        if (targetUrl.isNotBlank() && targetUrl != currentLoadedUrl) {
+        if (targetUrl != currentLoadedUrl) {
             currentLoadedUrl = targetUrl
             hasRendererCrashed = false
-            webViewInstance?.loadUrl(targetUrl)
+            if (targetUrl.isNotBlank()) {
+                webViewInstance?.loadUrl(targetUrl)
+            }
         }
     }
 
@@ -168,14 +178,23 @@ fun ByokBrowserView(
             ) {
                 // Back Button
                 IconButton(
-                    onClick = { webViewInstance?.goBack() },
-                    enabled = canGoBack,
+                    onClick = {
+                        if (webViewInstance?.canGoBack() == true) {
+                            webViewInstance?.goBack()
+                        } else if (currentLoadedUrl.isNotBlank()) {
+                            currentLoadedUrl = ""
+                            currentTitle = ""
+                        } else {
+                            onReturnToAi()
+                        }
+                    },
+                    enabled = canGoBack || currentLoadedUrl.isNotBlank(),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Browser Back",
-                        tint = if (canGoBack) MaterialTheme.colorScheme.onSurface
+                        tint = if (canGoBack || currentLoadedUrl.isNotBlank()) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                     )
                 }
@@ -194,6 +213,24 @@ fun ByokBrowserView(
                     )
                 }
 
+                // Home / Start Page Button
+                IconButton(
+                    onClick = {
+                        currentLoadedUrl = ""
+                        currentTitle = ""
+                        webViewInstance?.stopLoading()
+                    },
+                    enabled = currentLoadedUrl.isNotBlank(),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = "Browser Home",
+                        tint = if (currentLoadedUrl.isNotBlank()) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                    )
+                }
+
                 // Reload Button
                 IconButton(
                     onClick = {
@@ -204,21 +241,26 @@ fun ByokBrowserView(
                             webViewInstance?.reload()
                         }
                     },
+                    enabled = currentLoadedUrl.isNotBlank(),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Reload Page",
-                        tint = MaterialTheme.colorScheme.onSurface
+                        tint = if (currentLoadedUrl.isNotBlank()) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                     )
                 }
 
                 // URL & SSL Security pill indicator
                 val hostName = remember(currentLoadedUrl) {
-                    try {
-                        Uri.parse(currentLoadedUrl).host ?: currentLoadedUrl
-                    } catch (_: Exception) {
-                        currentLoadedUrl
+                    if (currentLoadedUrl.isBlank()) "BYOK Search"
+                    else {
+                        try {
+                            Uri.parse(currentLoadedUrl).host ?: currentLoadedUrl
+                        } catch (_: Exception) {
+                            currentLoadedUrl
+                        }
                     }
                 }
                 val isHttps = currentLoadedUrl.startsWith("https://", ignoreCase = true)
@@ -226,21 +268,25 @@ fun ByokBrowserView(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 6.dp)
+                        .padding(horizontal = 4.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (isHttps) Icons.Default.Lock else Icons.Default.WarningAmber,
+                        imageVector = if (currentLoadedUrl.isBlank()) Icons.Default.Search
+                        else if (isHttps) Icons.Default.Lock
+                        else Icons.Default.WarningAmber,
                         contentDescription = if (isHttps) "Secure connection" else "Not secure",
-                        tint = if (isHttps) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        tint = if (currentLoadedUrl.isBlank()) MaterialTheme.colorScheme.primary
+                        else if (isHttps) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (hostName.isNotBlank()) hostName else "BYOK Web",
+                        text = hostName,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
@@ -258,12 +304,15 @@ fun ByokBrowserView(
                             isCurrentlyBookmarked = isBookmarked
                         )
                     },
+                    enabled = currentLoadedUrl.isNotBlank(),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                         contentDescription = if (isBookmarked) "Remove Bookmark" else "Save Bookmark",
-                        tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (currentLoadedUrl.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        else if (isBookmarked) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -287,19 +336,21 @@ fun ByokBrowserView(
                             context.startActivity(intent)
                         } catch (_: Exception) {}
                     },
+                    enabled = currentLoadedUrl.isNotBlank(),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = "Open in External Browser",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (currentLoadedUrl.isNotBlank()) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                     )
                 }
             }
         }
 
-        // Loading Progress Indicator
-        if (isLoading && !hasRendererCrashed) {
+        // Loading Progress Indicator (only shown while loading a web page)
+        if (isLoading && currentLoadedUrl.isNotBlank() && !hasRendererCrashed) {
             LinearProgressIndicator(
                 progress = { pageProgress },
                 modifier = Modifier
@@ -312,8 +363,18 @@ fun ByokBrowserView(
             Spacer(modifier = Modifier.height(2.dp))
         }
 
-        // Web Content or Renderer Crash Fallback
-        if (hasRendererCrashed) {
+        // Web Content, Browser Start Page, or Renderer Crash Fallback
+        if (currentLoadedUrl.isBlank()) {
+            BrowserStartScreen(
+                bookmarks = bookmarks,
+                onSelectUrl = { selected ->
+                    viewModel.navigateToBrowserUrl(selected)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            )
+        } else if (hasRendererCrashed) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -373,13 +434,6 @@ fun ByokBrowserView(
                 AndroidView(
                     factory = { ctx ->
                         SafeBrowserWebView(ctx).apply {
-                            val isEmulator = Build.FINGERPRINT.contains("generic") ||
-                                    Build.HARDWARE.contains("goldfish") ||
-                                    Build.HARDWARE.contains("ranchu")
-                            if (isEmulator) {
-                                setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                            }
-
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             settings.loadWithOverviewMode = true
@@ -387,6 +441,10 @@ fun ByokBrowserView(
                             settings.setSupportZoom(true)
                             settings.builtInZoomControls = true
                             settings.displayZoomControls = false
+                            settings.mediaPlaybackRequiresUserGesture = true
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            }
 
                             CookieManager.getInstance().setAcceptCookie(true)
                             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -447,6 +505,7 @@ fun ByokBrowserView(
                                 override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
                                     Log.w("ByokBrowserView", "WebView render process exited (didCrash=${detail?.didCrash()}).")
                                     try {
+                                        (view?.parent as? ViewGroup)?.removeView(view)
                                         view?.destroy()
                                     } catch (_: Exception) {}
                                     webViewInstance = null
@@ -723,6 +782,182 @@ fun ByokBrowserView(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun BrowserStartScreen(
+    bookmarks: List<BrowserBookmarkEntity>,
+    onSelectUrl: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val quickEngines = remember {
+        listOf(
+            Triple("Google Search", "Search the web directly", "https://www.google.com"),
+            Triple("DuckDuckGo", "Private search engine", "https://duckduckgo.com"),
+            Triple("Wikipedia", "The Free Encyclopedia", "https://en.wikipedia.org"),
+            Triple("GitHub", "Code repositories & developer tools", "https://github.com"),
+            Triple("Android Developers", "Documentation, API guides & references", "https://developer.android.com")
+        )
+    }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Language,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "BYOK Web Browser",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Search the web or enter any website address below.\nPrivate and completely separate from AI chats.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        item {
+            Text(
+                text = "Quick Search & Sites",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 4.dp)
+            )
+        }
+
+        items(quickEngines, key = { it.first }) { (title, desc, url) ->
+            Card(
+                onClick = { onSelectUrl(url) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = desc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        if (bookmarks.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Saved Bookmarks",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp, bottom = 4.dp)
+                )
+            }
+
+            items(bookmarks.take(4), key = { it.url }) { bm ->
+                Card(
+                    onClick = { onSelectUrl(bm.url) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bookmark,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = bm.title.ifBlank { bm.url },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = bm.url,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

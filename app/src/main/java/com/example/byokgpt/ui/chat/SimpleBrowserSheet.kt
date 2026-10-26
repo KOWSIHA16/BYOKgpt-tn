@@ -78,6 +78,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 class SafeBrowserWebView(context: android.content.Context) : WebView(context) {
     private var activeFloatingActionMode: ActionMode? = null
 
+    init {
+        // Enforce software layer rendering to completely eliminate Chromium GPU driver renderer crashes (code -1)
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            setRendererPriorityPolicy(RENDERER_PRIORITY_BOUND, false)
+        }
+    }
+
     override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? {
         val mode = super.startActionMode(callback, type)
         if (type == ActionMode.TYPE_FLOATING) {
@@ -413,6 +421,7 @@ fun SimpleBrowserSheet(
                                             "WebView render process terminated (didCrash=${detail?.didCrash()}). Host app protected."
                                         )
                                         try {
+                                            (view?.parent as? ViewGroup)?.removeView(view)
                                             view?.destroy()
                                         } catch (_: Exception) {}
                                         webViewInstance = null

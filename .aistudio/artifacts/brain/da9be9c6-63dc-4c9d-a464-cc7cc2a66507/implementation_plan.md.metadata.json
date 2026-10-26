@@ -1,6 +1,6 @@
 {
-  "summary":  "Comprehensive implementation plan for BYOKGPT enhancements:\n- Web Search & In-App Browser overhaul with single persistent Settings toggle, subtle active mode indicator, separate chat histories for Normal and Web sessions, and direct web content summarization\n- Removal of both globe icons (composer toggle and top bar quick language chip)\n- Removal of AI response bubble box for a modern, borderless layout while retaining user message bubbles\n- Functional Long-term Memory Summary with automatic background extraction, manual add/edit/delete, and Room persistence\n- Expanded file parser supporting PDF, TXT, CSV, JSON, XML, DOCX, XLSX, and code files with real text content extraction passed to LLMs\n- Native image generation and editing using configured provider models with progress animations\n- Fixed chat reliability, coroutine async streaming, and BYOKGPT DoraDev identity system prompts",
-  "updatedAt":  "2026-10-25T07:02:55.349258513Z",
+  "summary":  "Comprehensive implementation plan for BYOKGPT upgrade: Gemini 3.8 Flash model exclusive endpoint, real-time live search grounding with date/time context, complete interactive chat message actions (Copy, Like, Dislike, Share, Regenerate for AI; Copy, Edit, Delete for User) with clickable links, app PIN and biometric unlock security on cold launch and resume, multi-provider image generation (Pollinations, Gemini Imagen, OpenAI DALL-E) with clear Anthropic handling, and organized Settings.",
+  "updatedAt":  "2026-10-26T12:50:35.800126473Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
