@@ -223,7 +223,12 @@ class SecureKeyStorage(context: Context) {
     }
 
     fun getSelectedModel(provider: AiProvider): String {
-        return prefs.getString("model_${provider.name}", provider.defaultModel) ?: provider.defaultModel
+        val saved = prefs.getString("model_${provider.name}", provider.defaultModel) ?: provider.defaultModel
+        if (provider == AiProvider.GEMINI && (saved == "gemini-1.5-flash" || saved.startsWith("gemini-1.5-"))) {
+            saveSelectedModel(AiProvider.GEMINI, "gemini-3.5-flash")
+            return "gemini-3.5-flash"
+        }
+        return saved
     }
 
     fun saveCurrentProvider(provider: AiProvider) {

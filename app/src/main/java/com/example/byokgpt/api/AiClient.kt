@@ -16,4 +16,10 @@ interface AiClient {
     ): Flow<StreamChunk>
 
     suspend fun testConnection(config: ProviderConfig, model: String): Result<String>
+
+    suspend fun generateImage(
+        prompt: String,
+        config: ProviderConfig,
+        baseImageBase64: String? = null
+    ): Result<String> = Result.failure(UnsupportedOperationException("Image generation is not supported for ${config.provider.displayName}"))
 }

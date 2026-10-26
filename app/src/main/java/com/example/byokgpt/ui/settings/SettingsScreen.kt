@@ -29,12 +29,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
@@ -115,6 +118,15 @@ fun SettingsScreen(
 
     // Dialog state for AI Response Language
     var showLanguageDialog by remember { mutableStateOf(false) }
+
+    val memories by viewModel.memories.collectAsState()
+    var showAddMemoryDialog by remember { mutableStateOf(false) }
+    var newMemoryKey by remember { mutableStateOf("") }
+    var newMemoryContent by remember { mutableStateOf("") }
+    var editingMemory by remember { mutableStateOf<com.example.byokgpt.data.MemoryEntity?>(null) }
+    var editMemoryKey by remember { mutableStateOf("") }
+    var editMemoryContent by remember { mutableStateOf("") }
+    var showClearMemoriesDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -345,7 +357,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 6: Intelligence
+            // Section 6: Intelligence & Web Search
             item {
                 SettingsSectionCard(
                     title = stringResource(R.string.sec_intelligence),
@@ -366,11 +378,136 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingSwitchItem(
-                        title = "Web Search Grounding",
-                        subtitle = "Instruct models to search and cite current facts when capable",
+                        title = "Web Search & In-App Browser",
+                        subtitle = "When ON, search the web, open URLs, and ask questions about real web content using the chat composer",
                         checked = settings.webSearch,
                         onCheckedChange = { viewModel.settingsManager.updateWebSearch(it) }
                     )
+                }
+            }
+
+            // Section: Memory Summary & Personalization
+            item {
+                SettingsSectionCard(
+                    title = "Memory Summary & Personalization",
+                    icon = Icons.Default.Memory
+                ) {
+                    SettingSwitchItem(
+                        title = "Long-Term Memory",
+                        subtitle = "Automatically remembers helpful user preferences and facts to personalize future chats",
+                        checked = settings.memoryEnabled,
+                        onCheckedChange = { viewModel.settingsManager.updateMemoryEnabled(it) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Saved Memories (${memories.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = if (memories.isEmpty()) "No memories saved yet. Captured facts will appear automatically, or add them manually."
+                                else "${memories.size} active memories stored locally on device.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = {
+                            newMemoryKey = ""
+                            newMemoryContent = ""
+                            showAddMemoryDialog = true
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Add")
+                        }
+                    }
+
+                    if (memories.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            memories.forEach { mem ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                        .padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = mem.key,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "[${mem.source}]",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                        Text(
+                                            text = mem.content,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Row {
+                                        IconButton(
+                                            onClick = {
+                                                editingMemory = mem
+                                                editMemoryKey = mem.key
+                                                editMemoryContent = mem.content
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { viewModel.deleteMemory(mem.id) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = "Delete",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            TextButton(
+                                onClick = { showClearMemoriesDialog = true },
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("Clear All Memories", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -724,6 +861,134 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showLanguageDialog = false }) {
                     Text("Close")
+                }
+            }
+        )
+    }
+
+    // Add Memory Dialog
+    if (showAddMemoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddMemoryDialog = false },
+            title = { Text("Add Memory Fact") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Store a preference or context that the AI should remember in future conversations.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = newMemoryKey,
+                        onValueChange = { newMemoryKey = it },
+                        label = { Text("Category / Key (e.g. Favorite Language)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = newMemoryContent,
+                        onValueChange = { newMemoryContent = it },
+                        label = { Text("Memory Fact (e.g. Prefers Kotlin & Compose)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newMemoryKey.isNotBlank() && newMemoryContent.isNotBlank()) {
+                            viewModel.addMemory(newMemoryKey.trim(), newMemoryContent.trim())
+                            showAddMemoryDialog = false
+                            Toast.makeText(context, "Memory saved locally", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = newMemoryKey.isNotBlank() && newMemoryContent.isNotBlank()
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddMemoryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Edit Memory Dialog
+    editingMemory?.let { memory ->
+        AlertDialog(
+            onDismissRequest = { editingMemory = null },
+            title = { Text("Edit Memory Fact") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = editMemoryKey,
+                        onValueChange = { editMemoryKey = it },
+                        label = { Text("Category / Key") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = editMemoryContent,
+                        onValueChange = { editMemoryContent = it },
+                        label = { Text("Memory Fact") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (editMemoryKey.isNotBlank() && editMemoryContent.isNotBlank()) {
+                            viewModel.updateMemory(
+                                memory.copy(
+                                    key = editMemoryKey.trim(),
+                                    content = editMemoryContent.trim(),
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                            )
+                            editingMemory = null
+                            Toast.makeText(context, "Memory updated", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = editMemoryKey.isNotBlank() && editMemoryContent.isNotBlank()
+                ) {
+                    Text("Update")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingMemory = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Clear All Memories Dialog
+    if (showClearMemoriesDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearMemoriesDialog = false },
+            title = { Text("Clear All Memories?") },
+            text = {
+                Text("This will permanently remove all stored facts and preferences from your device. Normal chat history will not be affected.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearAllMemories()
+                        showClearMemoriesDialog = false
+                        Toast.makeText(context, "All memories cleared", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Clear All", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearMemoriesDialog = false }) {
+                    Text("Cancel")
                 }
             }
         )

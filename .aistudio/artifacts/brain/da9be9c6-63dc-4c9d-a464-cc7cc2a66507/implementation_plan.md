@@ -1,155 +1,156 @@
-# BYOKGPT — Complete Implementation & Reliability Plan
+# BYOKGPT Production Refinement & Feature Enhancement Plan
 
-Complete overhaul and enhancement of BYOKGPT Android AI client: replacing the app icon with the user-uploaded neon badge, adding real-time provider connection verification, multi-language system prompt injection, Google-powered web search with in-app browser, Claude-inspired multi-attachment carousel, and rich Markdown code blocks while preserving instant message responsiveness.
+1-2 concise sentences summarizing the overarching goal:
+This plan upgrades the existing BYOKGPT Android app into a production-grade, highly reliable AI assistant by removing unwanted UI clutter, eliminating the AI response bubble box for a modern borderless look, introducing persistent split-session Web Search without mandatory API keys, adding fully functional long-term memory management, expanding attachment parsing across documents and code, and integrating genuine image generation and editing.
 
 ---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following product decisions were confirmed during interactive clarification:
-> - **Response Language Selector**: Accessible both via the **Settings screen** (default selection) and via a **quick-toggle language chip in the Chat header** for instant switching between Automatic, English, Tamil, Tanglish, Malayalam, Hindi, Kannada, Telugu, Bengali, and Marathi.
-> - **Google Web Search & Browser**: Integrated as a **Web Search toggle in the composer** that instructs models to cite search-grounded real-time facts, coupled with a lightweight **in-app secure WebView browser sheet** for clicking search results, inspecting citations, or browsing queries directly within the app.
-> - **Claude-Inspired Attachments**: Enabled as a **multi-file horizontal carousel** positioned directly above the input composer, featuring image thumbnails, PDF/document type badges, file sizes, and quick-remove buttons, backed by a strict **10MB cumulative limit**.
-> - **App Logo & Icon**: The uploaded glossy neon 'B' badge (`file_00000000a4fc8208b423e83efa890d18_e7339cd5.png`) will be converted and installed as the app's adaptive launcher icon, round icon, and displayed in the drawer header and empty state.
+> All three key design decisions have been confirmed with the user and are locked into this plan:
+
+- **Confirmed Decision 1 (Web Search Execution)**: When Web Search is toggled ON in Settings, queries sent in chat will execute live web grounding/search, synthesize answers with cited sources, and provide one-tap links to open relevant sources in the secure in-app browser.
+- **Confirmed Decision 2 (AI Response Presentation)**: In response to the user's specific request (*"user type pannurathu bubble Iruku okay super, ana ai reply pannuratha bubble la illama plain ah bubble box ah mattum remove pannu"*), the AI message bubble card is removed. The assistant's markdown text will render borderless directly on the canvas alongside its provider avatar and action toolbar, while the user's message remains in its rounded colored bubble.
+- **Confirmed Decision 3 (Memory Extraction)**: Long-term memory extraction operates automatically and silently in the background when Memory is enabled in Settings, saving key user preferences and facts while strictly ignoring sensitive credentials and API keys.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: BYOKGPT ("Bring Your Own Key GPT") is a native Android AI companion that empowers users to communicate securely with Google Gemini, Anthropic Claude, and OpenAI using their own API keys. It delivers instant local UI responsiveness, live token streaming, rich Markdown formatting with one-tap code copying, multimodal file processing, in-app Google web browsing, and multilingual responses across South Asian and global languages.
-- **Target Audience**: Power users, developers, and multilingual individuals wanting a high-performance, private, zero-subscription AI client with complete control over their credentials.
-- **Key Value**: Eliminates artificial response delays, provides transparent provider health checks, supports native script & phonetic (Tanglish) communication, and combines multimodal attachments with in-app search browsing.
+- **What It Does**: BYOKGPT (Bring Your Own Key GPT) is a multi-provider Android AI client supporting Google Gemini, OpenAI ChatGPT, and Anthropic Claude. Users bring their own API keys, securely stored in Android Keystore with zero cloud telemetry or third-party loggers.
+- **Developer Identity**: When asked about itself, the assistant clearly and consistently identifies as **BYOKGPT**, developed by **DoraDev**.
+- **Key Value**: A fast, private, multi-model AI assistant with native document comprehension, web search grounding, long-term memory, and local privacy.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-### Key User Flows
-1. **App Icon & Branding**: The user sees the high-contrast neon cyan & magenta glowing 'B' badge with BYOKGPT branding on their Android home screen and in the navigation drawer.
-2. **Provider Verification Flow**: In Settings → AI Providers & API Keys, each provider displays an informative status badge (`Not configured`, `Checking credentials…`, `Connected & verified`, or `Connection failed`). Tapping "Test Connection" executes a lightweight ping and updates the state in real time without exposing keys.
-3. **Chatting & Language Switching**:
-   - The user taps the **Language Chip** in the chat header (e.g. `🌐 Tanglish`) to switch target output language on the fly.
-   - User types a query or toggles **Google Web Search** (`🔍 Search`).
-   - Tapping Send immediately renders the user bubble (< 10ms) and initiates async streaming with a live cursor.
-4. **Claude-Style Multi-Attachment Workflow**:
-   - Tapping the paperclip button opens the picker to select images or PDF documents.
-   - Selected files populate a horizontal scrollable carousel above the input bar with thumbnail previews, filename, size, and individual delete buttons.
-   - Files exceeding 10MB trigger an immediate warning snackbar.
-5. **In-App Google Web Search & Browser**:
-   - If Web Search is enabled, queries request grounded facts with URLs.
-   - Tapping a citation or search action slides up an **embedded WebView browser** with an address bar, navigation controls (back/forward/reload), and progress indicator, avoiding disruptive external browser switching.
-6. **Rich Response & Code Rendering**:
-   - Fenced code blocks render in a styled container with language badge, monospaced font, and a prominent "Copy Code" button.
-   - Lists, blockquotes, bold text, and headers render cleanly according to Material Design 3 typography.
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [=] BYOKGPT  [Gemini 3.5 Flash v]               (:)        │
+│      [Mode: Web Search Active]                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│                                    ┌──────────────────────┐ │
+│                                    │ User message bubble  │ │
+│                                    │ with attachments     │ │
+│                                    └──────────────────────┘ │
+│                                                             │
+│  (*) BYOKGPT (DoraDev)                                      │
+│  Borderless plain AI markdown response flows                │
+│  directly on the screen canvas without a bubble box.        │
+│                                                             │
+│  Sources:                                                   │
+│  [1] Android Developers (developer.android.com)             │
+│                                                             │
+│  [Copy] [Retry] [Switch Provider] [Share]                   │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  (+) [ Search or ask anything...               ] [Send]     │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Visual Identity & Theme
-- **Color Palette**: Dark OLED theme with deep slate backgrounds (`#0B0F19`), surface containers (`#151C2C`), vibrant electric cyan/blue primary accents (`#2563EB` / `#38BDF8`), and neon purple accents (`#A855F7`).
-- **Typography**: Clean Android system sans-serif hierarchy; monospaced font for code snippets (`Roboto Mono` / monospace).
-- **Rhythm & Touch Targets**: Generous 48dp minimum interactive component touch targets, rounded pill shapes (`16.dp`–`24.dp`), and animated transitions.
+### Visual Changes & Polish
+1. **Remove Duplicate Globe Icons & Language Selector**:
+   - Remove the globe icon toggle from the composer row in `ChatScreen.kt`.
+   - Remove the language selector globe chip from the `TopAppBar` in `ChatScreen.kt`. The language selector will reside exclusively in `SettingsScreen.kt`.
+   - Add a subtle status bar chip under the top bar or inside the composer placeholder when Web Search is active (e.g. `[Web Search Active]`, placeholder: *"Search the web or enter URL..."*).
+2. **Borderless AI Message Bubble**:
+   - In `ChatMessageBubble.kt`: User message retains the rounded primary bubble container.
+   - Assistant message removes `background(surfaceContainerHighest)`, clipping, and fixed width bounds, allowing rich markdown, code blocks, and source citations to flow directly on the chat background.
+   - Assistant avatar remains at the top-left of the response, and the action toolbar (Copy, Retry, Switch Provider, Share) remains neatly anchored below the text.
+3. **Attachment Carousel & Preview**:
+   - Updated file picker supporting photos/images, PDF, TXT, DOC/DOCX, XLS/XLSX, CSV, PPT/PPTX, JSON, XML, source code (`.kt`, `.py`, `.js`, `.ts`, `.java`, `.cpp`, `.html`, `.css`), and ZIP archives.
+   - Document badge with actual file type icon, file name, and formatted byte size.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Multi-File Attachment Carousel**:
-  - *Chosen Approach*: Horizontal `LazyRow` preview bar directly above the text input, preserving typed text while adding or removing attachments.
-  - *Why*: Directly mirrors the proven UX of Claude and desktop AI clients, giving users visual confirmation and control over payload contents before sending.
-- **Response Language via System Prompt Injection**:
-  - *Chosen Approach*: Inject explicit, tailored linguistic directives into the system prompt for each provider based on the selected enum (`AUTOMATIC`, `ENGLISH`, `TAMIL`, `TANGLISH`, `MALAYALAM`, `HINDI`, `KANNADA`, `TELUGU`, `BENGALI`, `MARATHI`).
-  - *Why*: Works uniformly across all three providers (Gemini, Claude, OpenAI) without requiring proprietary language parameters. For Tanglish, explicit phonetic script instructions ensure authentic colloquial responses.
-- **Provider Connection State Management**:
-  - *Chosen Approach*: Persist connection test outcomes (`ProviderConnectionStatus`) in `SettingsManager` with timestamp and verification state so users have clear visibility when entering Settings.
-  - *Why*: Distinguishes between an untested saved key and a verified live connection, saving users from guessing why requests fail.
-- **Integrated WebView Browser**:
-  - *Chosen Approach*: Modal bottom sheet / screen containing an Android `WebView` with safe browsing defaults, JavaScript enabled, and navigation controls.
-  - *Why*: Keeps the user immersed in their research and chat workflow without throwing them into Chrome or another browser app.
+### 1. Web Search & Separate Conversation Histories
+- **Approach**: Persistent setting in `SettingsManager` (`webSearchEnabled`).
+- **Separate Histories**: Update `ConversationEntity` to include `sessionType: String` (`"NORMAL"` vs `"WEB_SEARCH"`). The drawer will display separate sections or filter tabs ("Chats" vs "Web Searches"), ensuring switching modes never overwrites or mingles normal AI conversations with web search queries.
+- **No-Key Web Access**: When a user inputs a direct URL (e.g., `https://...` or `wikipedia.org`), it opens directly in `SimpleBrowserSheet` without requiring any AI API key. When a search query is submitted, if no API key is configured, it launches Google Search in `SimpleBrowserSheet` directly; if an API key is configured, it summarizes web search results and links sources.
+
+### 2. Functional Long-Term Memory Summary
+- **Approach**: Dedicated `MemoryEntity` in Room database (`id, key, content, source, timestamp`).
+- **Automatic Extraction**: When a turn completes, a lightweight background heuristic/prompt extracts key user profile facts (e.g. name, role, tech stack, preferences) and saves them, skipping any sensitive data (keys, passwords, tokens).
+- **Manual Management in Settings**: `SettingsScreen.kt` provides a full Memory Management screen with:
+  - Toggle Memory ON/OFF.
+  - View all stored memories as editable cards.
+  - Add manual memory ("Remember that I prefer Kotlin coroutines over RxJava").
+  - Edit or delete individual memories or clear all memories.
+- **Prompt Injection**: Active memories are formatted as `[User Long-Term Memories]` and injected into the system prompt.
+
+### 3. Comprehensive File Parsing & Multimodal Vision
+- **Approach**: Implement `DocumentParser` utility to read actual content from URI:
+  - Plain text, JSON, XML, CSV, code files: Read UTF-8 text directly.
+  - PDF documents: Extract text using Android's native `PdfRenderer` / text extraction.
+  - Images: Scale and compress into base64, passing directly to Gemini (`inlineData`) and OpenAI (`image_url`).
+  - Text contents are prepended into the message content (`--- Attached Document: filename.txt --- \n [content]`), allowing the AI to analyze the actual file contents.
+
+### 4. Image Generation & Editing
+- **Approach**:
+  - Support image generation via OpenAI `dall-e-3` / `dall-e-2` and Google Gemini Imagen endpoints when image generation is requested.
+  - Detect intent (e.g., "generate image of...", "draw a...", "edit this image") or provide an Image Generation mode toggle.
+  - Display actual generated bitmap/URL in an `ImageMessageCard` with download/share actions.
 
 ---
 
 ## 4. Technical Architecture & Data Strategy
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                              BYOKGPT UI                                │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                        Chat Screen Top Bar                       │  │
-│  │   [☰ Menu]   [Model Chip]   [🌐 Language Chip]   [⚙️ Settings]    │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                         Message Stream                           │  │
-│  │   - User Bubble (Multi-attachment badges + User text)            │  │
-│  │   - Assistant Bubble:                                            │  │
-│  │     * Markdown Formatter (Headers, Lists, Blockquotes)           │  │
-│  │     * Syntax Code Block + [📋 Copy Code] Button                  │  │
-│  │     * Search Citations & Links (Opens In-App Browser)            │  │
-│  │     * Inline Error Card: [⚠️ Details]  [🔄 Retry]  [🔀 Switch]     │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                   Composer & Attachment Bar                      │  │
-│  │   [Attachment Carousel: [🖼️ doc.png ✕] [📄 brief.pdf ✕] (<10MB)]  │  │
-│  │   [📎 Attach]  [🔍 Web Search Toggle]  [Type a message...] [➤]   │  │
-│  └──────────────────────────────────┬───────────────────────────────┘  │
-│                                     │                                  │
-│                                     ▼                                  │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                      In-App Browser Sheet                        │  │
-│  │   [← Back] [→ Fwd] [🔄 Reload] [https://www.google.com/...] [✕]  │  │
-│  │   [Android WebView Component with progress bar]                  │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│                                     │                                  │
-│                                     ▼                                  │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │                           ViewModel                              │  │
-│  │   - Instant UI Appending (<10ms)                                 │  │
-│  │   - AttachmentValidator (Cumulative <= 10MB, Images & PDF)       │  │
-│  │   - System Prompt Builder (Language + Search Grounding Directives│  │
-│  │   - OkHttp Call Cancellation on Stop                             │  │
-│  │   - Provider Health Ping (`testConnection`)                      │  │
-│  └──────────────────┬───────────────────────────────┬───────────────┘  │
-│                     │                               │                  │
-│                     ▼                               ▼                  │
-│  ┌─────────────────────────────────────┐  ┌─────────────────────────┐  │
-│  │        AI Provider Layer            │  │   Encrypted Key Store   │  │
-│  │  - GeminiClient (REST/SSE + Tools)  │  │  - Android Keystore     │  │
-│  │  - ClaudeClient (Messages REST/SSE) │  │    AES-256 GCM          │  │
-│  │  - OpenAiClient (Chat REST/SSE)     │  │  - Provider Health State│  │
-│  │  - Shared OkHttp Connection Pool    │  │  - Zero Secret Logging  │  │
-│  └─────────────────────────────────────┘  └─────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    BYOKGPT UI Layer                         │
+│  ChatScreen (Composer, Indicator, Drawer)                   │
+│  ChatMessageBubble (User Bubble | Plain Borderless AI)      │
+│  SettingsScreen (Web Search Toggle, Memory Manager)         │
+│  SimpleBrowserSheet (SafeBrowserWebView, onRenderGone)      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────┐
+│                    ChatViewModel                            │
+│  - Mode Management: Normal Chat vs Web Search               │
+│  - Immediate UI render (<10ms) & Background IO Streaming    │
+│  - Memory Extraction Engine & Document Parser               │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+               ┌───────────────┴───────────────┐
+               ▼                               ▼
+┌──────────────────────────────┐ ┌────────────────────────────┐
+│      Room AppDatabase        │ │      AiClient Layer        │
+│  - ConversationEntity        │ │  - GeminiClient            │
+│    (sessionType: CHAT | WEB) │ │  - OpenAiClient            │
+│  - MessageEntity             │ │  - ClaudeClient            │
+│  - MemoryEntity              │ │  - WebSearchClient / Engine│
+│  - SettingsManager           │ │  - SecureKeyStorage        │
+└──────────────────────────────┘ └────────────────────────────┘
 ```
 
-### Component & State Mapping
-
-1. **Launcher Icon & Branding**:
-   - `file_00000000a4fc8208b423e83efa890d18_e7339cd5.png` processed via ImageMagick into:
-     - `res/mipmap-*/ic_launcher.png` and `ic_launcher_round.png`
-     - `res/drawable/app_logo.png`
-     - Centered adaptive icon layers in `res/drawable/ic_launcher_foreground.xml` and `ic_launcher_background.xml`
-     - Displayed in `ConversationDrawerContent` and `ChatScreen` empty state.
-2. **Provider Connection Status**:
-   - Model `ProviderConnectionStatus`: `NOT_CONFIGURED`, `CHECKING`, `CONNECTED`, `FAILED(error)`.
-   - `SettingsScreen` and `ApiKeySetupDialog` reflect live status with colored badges and explicit test actions.
-3. **Response Language Injection**:
-   - Enum `ResponseLanguage`: `AUTOMATIC`, `ENGLISH`, `TAMIL`, `TANGLISH`, `MALAYALAM`, `HINDI`, `KANNADA`, `TELUGU`, `BENGALI`, `MARATHI`.
-   - Persisted in `SettingsManager.responseLanguage`.
-   - Injected into `ChatViewModel.buildSystemPrompt()` with strict script and grammatical guidelines.
-4. **Google Web Search & Browser**:
-   - `isWebSearchEnabled: Boolean` state in `ChatViewModel`.
-   - `SimpleBrowserSheet.kt`: Compose bottom sheet embedding Android `WebView` with progress indicator, URL display, back/forward buttons, and secure configuration.
-5. **Multi-Attachment Workflow**:
-   - `pendingAttachments: StateFlow<List<Attachment>>` supporting multiple files up to 10MB total.
-   - `AttachmentCarousel.kt`: Displays thumbnails, file names, size in KB/MB, and remove buttons.
-6. **Rich Markdown & Code Rendering**:
-   - `MarkdownText.kt`: Renders headings, bold, bullet points, blockquotes, and code blocks with syntax styling and a "Copy Code" button.
+### Migration & Database Schema Changes
+- Increment Room version to `3` in `AppDatabase.kt` with clean fallback migration:
+  - `ConversationEntity`: add `sessionType TEXT NOT NULL DEFAULT 'NORMAL'`.
+  - Add `MemoryEntity` table with `id`, `key`, `content`, `source`, `createdAt`, `updatedAt`.
+  - Create `MemoryDao` with `getAllMemoriesFlow()`, `insertMemory()`, `updateMemory()`, `deleteMemory()`, `clearAll()`.
 
 ---
 
-## 5. Verification Plan
+## 5. Implementation Phases & Verification Steps
 
-- Run unit & Robolectric tests (`gradle :app:testDebugUnitTest`) verifying request formatting, attachment validation, and language prompt generation.
-- Execute full app compilation (`compile_applet`) ensuring clean build without warnings.
-- Package updated APK and generate `BYOKGPT-updated.zip`.
+1. **Phase 1: UI Cleanup & AI Bubble Removal**
+   - In `ChatScreen.kt`: Remove composer globe button and TopAppBar language chip. Add subtle mode indicator when Web Search is active.
+   - In `ChatMessageBubble.kt`: Remove card container and background for `!isUser` messages, letting markdown render plain and borderless.
+2. **Phase 2: Web Search & Persistent Split Histories**
+   - Update `ConversationEntity` and `ChatDao` to filter by `sessionType` (`NORMAL` vs `WEB_SEARCH`).
+   - Wire web search toggle in `SettingsScreen` and connect search querying & browser linking.
+3. **Phase 3: Real Long-term Memory System**
+   - Create `MemoryEntity`, `MemoryDao`, and background extraction in `ChatViewModel`.
+   - Build Memory Management UI in `SettingsScreen.kt` (list, add, edit, delete).
+   - Inject memories into system prompt.
+4. **Phase 4: Document Parsing & Multimodal Vision**
+   - Implement `DocumentParser.kt` to extract text from PDF, CSV, JSON, TXT, XML, and code files.
+   - Feed parsed contents and image data to Gemini and OpenAI vision APIs.
+5. **Phase 5: Image Generation & Chat Reliability**
+   - Implement image generation client and message rendering.
+   - Test end-to-end compilation with `compile_applet` and test suite with `gradle :app:testDebugUnitTest`.

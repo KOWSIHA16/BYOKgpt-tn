@@ -23,14 +23,21 @@ import com.example.byokgpt.security.LogSanitizer
 import com.example.byokgpt.security.SecureKeyStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import com.example.byokgpt.data.MemoryEntity
+import com.example.byokgpt.data.BrowserBookmarkEntity
+import com.example.byokgpt.data.BrowserHistoryEntity
+import com.example.byokgpt.model.AppMode
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.Call
+import java.net.URLEncoder
 import java.util.UUID
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -42,6 +49,84 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     val conversations: StateFlow<List<ConversationEntity>> = repository.conversations
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val memories: StateFlow<List<MemoryEntity>> = repository.getAllMemories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // --- App Mode (AI Mode vs BYOK Browser Mode) ---
+    private val _appMode = MutableStateFlow(AppMode.AI)
+    val appMode: StateFlow<AppMode> = _appMode.asStateFlow()
+
+    private val _currentBrowserUrl = MutableStateFlow("https://www.google.com")
+    val currentBrowserUrl: StateFlow<String> = _currentBrowserUrl.asStateFlow()
+
+    val browserBookmarks: StateFlow<List<BrowserBookmarkEntity>> = repository.getAllBookmarks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val browserHistory: StateFlow<List<BrowserHistoryEntity>> = repository.getAllHistory()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun setAppMode(mode: AppMode) {
+        _appMode.value = mode
+    }
+
+    fun navigateToBrowserUrl(rawInput: String) {
+        val trimmed = rawInput.trim()
+        if (trimmed.isEmpty()) return
+        val targetUrl = resolveUrlOrSearch(trimmed)
+        _currentBrowserUrl.value = targetUrl
+        _appMode.value = AppMode.BROWSER
+    }
+
+    fun recordBrowserHistory(url: String, title: String) {
+        if (url.isBlank() || url == "about:blank") return
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.recordHistory(url, title.ifBlank { url })
+        }
+    }
+
+    fun toggleBookmark(url: String, title: String, isCurrentlyBookmarked: Boolean) {
+        if (url.isBlank() || url == "about:blank") return
+        viewModelScope.launch(Dispatchers.IO) {
+            if (isCurrentlyBookmarked) {
+                repository.removeBookmark(url)
+            } else {
+                repository.saveBookmark(url, title.ifBlank { url })
+            }
+        }
+    }
+
+    fun deleteBookmark(url: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.removeBookmark(url)
+        }
+    }
+
+    fun clearBrowserHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearAllHistory()
+        }
+    }
+
+    fun resolveUrlOrSearch(input: String): String {
+        val trimmed = input.trim()
+        val isExplicitUrl = trimmed.startsWith("http://", ignoreCase = true) ||
+                trimmed.startsWith("https://", ignoreCase = true)
+
+        if (isExplicitUrl) return trimmed
+
+        // Check if user entered a domain like "example.com", "github.com/android"
+        val domainRegex = Regex("""^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?$""")
+        if (!trimmed.contains(" ") && domainRegex.matches(trimmed)) {
+            return "https://$trimmed"
+        }
+
+        // Plain text query: perform real web search using Google Search
+        return "https://www.google.com/search?q=" + URLEncoder.encode(trimmed, "UTF-8")
+    }
+
+    private val _openBrowserEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val openBrowserEvent = _openBrowserEvent.asSharedFlow()
 
     private val _currentConversationId = MutableStateFlow<String?>(null)
     val currentConversationId: StateFlow<String?> = _currentConversationId.asStateFlow()
@@ -173,8 +258,34 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun startNewChat(provider: AiProvider = _selectedProvider.value, model: String = _selectedModel.value) {
         stopGeneration()
         viewModelScope.launch {
-            val newConv = repository.createNewConversation("New Chat", provider, model)
+            val session = if (settingsManager.settings.value.webSearch) "WEB_SEARCH" else "CHAT"
+            val title = if (session == "WEB_SEARCH") "New Web Search" else "New Chat"
+            val newConv = repository.createNewConversation(title, provider, model, sessionType = session)
             selectConversation(newConv.id)
+        }
+    }
+
+    fun addMemory(key: String, content: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insertMemory(key, content, "MANUAL")
+        }
+    }
+
+    fun updateMemory(memory: MemoryEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateMemory(memory)
+        }
+    }
+
+    fun deleteMemory(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteMemory(id)
+        }
+    }
+
+    fun clearAllMemories() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearAllMemories()
         }
     }
 
@@ -289,6 +400,30 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 existingConvId
             }
 
+            // Check if user entered a direct website URL
+            val isDirectUrl = trimmed.startsWith("http://", ignoreCase = true) ||
+                    trimmed.startsWith("https://", ignoreCase = true) ||
+                    (trimmed.matches(Regex("""^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?$""")) && !trimmed.contains(" "))
+
+            if (isDirectUrl) {
+                val directTarget = if (!trimmed.startsWith("http://", ignoreCase = true) && !trimmed.startsWith("https://", ignoreCase = true)) {
+                    "https://$trimmed"
+                } else trimmed
+                _openBrowserEvent.tryEmit(directTarget)
+            }
+
+            // Combine document text if documents/code were parsed
+            val fullPromptText = buildString {
+                append(trimmed)
+                val docsWithText = attachments.filter { !it.extractedText.isNullOrBlank() }
+                if (docsWithText.isNotEmpty()) {
+                    append("\n\n--- Uploaded Documents & File Content ---\n")
+                    docsWithText.forEach { doc ->
+                        append("\n[File: ${doc.fileName}]\n${doc.extractedText}\n")
+                    }
+                }
+            }
+
             // Save user message to database so it is NEVER lost, even if network fails
             val finalUserMsg = userMessage.copy(conversationId = effectiveConvId)
             repository.insertMessageDirect(finalUserMsg)
@@ -296,6 +431,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // Validate API key
             val apiKey = secureKeyStorage.getApiKey(provider)
             if (apiKey.isBlank()) {
+                // If Web Search is ON, browse directly via Google search without requiring an AI key
+                if (settingsManager.settings.value.webSearch && trimmed.isNotBlank()) {
+                    val searchUrl = "https://www.google.com/search?q=" + URLEncoder.encode(trimmed, "UTF-8")
+                    _openBrowserEvent.tryEmit(searchUrl)
+                    val infoEntity = assistantMessage.copy(
+                        conversationId = effectiveConvId,
+                        content = "Opened Google Web Search for: \"$trimmed\" in in-app browser. (No AI API key required for direct web search)",
+                        status = MessageStatus.SUCCESS.name
+                    )
+                    _currentMessages.update { list -> list.map { if (it.id == assistantMsgId) infoEntity else it } }
+                    repository.insertMessageDirect(infoEntity)
+                    _isStreaming.value = false
+                    _streamingMessageId.value = null
+                    return@launch
+                }
+
                 val errorMsg = "No API key configured for ${provider.displayName}. Tap Configure Key or Switch Provider below."
                 timings.errorMessage = errorMsg
                 timings.t5CompletedMs = System.currentTimeMillis()
@@ -316,6 +467,68 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            val client = AiClientFactory.getClient(provider)
+            val config = ProviderConfig(
+                provider = provider,
+                apiKey = apiKey,
+                customEndpoint = secureKeyStorage.getCustomEndpoint(provider),
+                selectedModel = model
+            )
+
+            // Check if user is requesting image generation or editing
+            val isImageRequest = isImageGenerationRequest(trimmed, primaryAttachment?.isImage == true)
+            if (isImageRequest) {
+                if (provider == AiProvider.CLAUDE) {
+                    val errorMsg = "Image generation is not supported by Anthropic Claude directly in BYOKGPT. Please switch to Google Gemini (Imagen 3) or OpenAI (DALL-E 3) using the Model Picker or Settings."
+                    val errorEntity = assistantMessage.copy(
+                        conversationId = effectiveConvId,
+                        status = MessageStatus.ERROR.name,
+                        errorMessage = errorMsg
+                    )
+                    _currentMessages.update { list -> list.map { if (it.id == assistantMsgId) errorEntity else it } }
+                    repository.insertMessageDirect(errorEntity)
+                    _isStreaming.value = false
+                    _streamingMessageId.value = null
+                    return@launch
+                }
+
+                // Show in-flight generating state
+                _currentMessages.update { list ->
+                    list.map { if (it.id == assistantMsgId) it.copy(content = "Generating image with ${provider.displayName}...") else it }
+                }
+
+                val imgResult = client.generateImage(
+                    prompt = trimmed,
+                    config = config,
+                    baseImageBase64 = primaryAttachment?.base64Data
+                )
+
+                if (imgResult.isSuccess) {
+                    val imgUrl = imgResult.getOrNull()
+                    val successEntity = assistantMessage.copy(
+                        conversationId = effectiveConvId,
+                        content = "Generated with ${provider.displayName}",
+                        generatedImageUrl = imgUrl,
+                        status = MessageStatus.SUCCESS.name
+                    )
+                    _currentMessages.update { list -> list.map { if (it.id == assistantMsgId) successEntity else it } }
+                    repository.insertMessageDirect(successEntity)
+                } else {
+                    val err = imgResult.exceptionOrNull()?.message ?: "Failed to generate image."
+                    val errorEntity = assistantMessage.copy(
+                        conversationId = effectiveConvId,
+                        content = "",
+                        status = MessageStatus.ERROR.name,
+                        errorMessage = err
+                    )
+                    _currentMessages.update { list -> list.map { if (it.id == assistantMsgId) errorEntity else it } }
+                    repository.insertMessageDirect(errorEntity)
+                }
+                _isStreaming.value = false
+                _streamingMessageId.value = null
+                return@launch
+            }
+
             // T2: Network request begins
             val t2 = System.currentTimeMillis()
             timings.t2NetworkStartMs = t2
@@ -326,15 +539,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 msg.id != assistantMsgId &&
                 (msg.content.isNotBlank() || !msg.attachmentBase64.isNullOrEmpty()) &&
                 msg.status != MessageStatus.ERROR.name
+            }.map { msg ->
+                if (msg.id == finalUserMsg.id && fullPromptText != trimmed) {
+                    msg.copy(content = fullPromptText)
+                } else msg
             }
 
-            val client = AiClientFactory.getClient(provider)
-            val config = ProviderConfig(
-                provider = provider,
-                apiKey = apiKey,
-                customEndpoint = secureKeyStorage.getCustomEndpoint(provider),
-                selectedModel = model
-            )
             val systemPrompt = buildSystemPrompt()
             val inFlightContent = StringBuilder()
 
@@ -389,6 +599,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             // Persist to Room SQLite ONCE when stream finishes
                             repository.insertMessageDirect(successEntity)
+
+                            // Extract useful facts/preferences into long-term memory in background
+                            extractAndSaveMemories(trimmed, finalText)
                         }
                         is StreamChunk.Error -> {
                             val t5 = System.currentTimeMillis()
@@ -645,11 +858,61 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun isImageGenerationRequest(prompt: String, hasImageAttachment: Boolean): Boolean {
+        val lower = prompt.trim().lowercase()
+        if (lower.startsWith("/image") || lower.startsWith("/draw") || lower.startsWith("/img")) return true
+        if (lower.contains("generate an image") || lower.contains("generate image") ||
+            lower.contains("create an image") || lower.contains("create image") ||
+            lower.contains("draw an image") || lower.contains("draw a picture") ||
+            lower.contains("generate a picture") || lower.contains("create a picture") ||
+            lower.contains("generate photo") || lower.contains("create photo") ||
+            lower.contains("design an image") || lower.contains("paint an image") ||
+            lower.contains("paint a picture")
+        ) return true
+        if (hasImageAttachment && (lower.contains("edit this image") || lower.contains("modify this image") || lower.contains("change this image"))) {
+            return true
+        }
+        return false
+    }
+
+    private fun extractAndSaveMemories(userPrompt: String, aiReply: String) {
+        if (!settingsManager.settings.value.memoryEnabled) return
+        val lower = userPrompt.lowercase()
+        // Security: Never save secrets, passwords, or credentials automatically
+        val sensitiveKeywords = listOf("password", "api_key", "apikey", "secret", "token", "credential", "auth", "private key", "card number")
+        if (sensitiveKeywords.any { lower.contains(it) }) return
+
+        val patterns = listOf(
+            Regex("""(?i)\b(?:my name is|call me|i am)\s+([A-Za-z0-9_ -]{2,30})\b""") to "User Name",
+            Regex("""(?i)\b(?:i prefer|my preference is|i like)\s+([^\.,;\n]{3,60})""") to "Preference",
+            Regex("""(?i)\b(?:i work as|my job is|i am a)\s+([^\.,;\n]{3,40})""") to "Occupation",
+            Regex("""(?i)\b(?:i live in|i am from|my location is)\s+([^\.,;\n]{3,40})""") to "Location",
+            Regex("""(?i)\b(?:my project is|i am building|i am working on)\s+([^\.,;\n]{3,60})""") to "Current Project",
+            Regex("""(?i)\bremember that\s+([^\.,;\n]{3,80})""") to "Fact"
+        )
+
+        for ((regex, key) in patterns) {
+            val match = regex.find(userPrompt)
+            if (match != null && match.groupValues.size > 1) {
+                val content = match.groupValues[1].trim()
+                if (content.isNotBlank() && content.length in 2..100) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        repository.insertMemory(key, content, "AUTO")
+                    }
+                    break
+                }
+            }
+        }
+    }
+
     private fun buildSystemPrompt(): String? {
         val customInstructions = settingsManager.settings.value.customInstructions.trim()
         val userName = settingsManager.settings.value.userName.trim()
         val responseLanguage = settingsManager.settings.value.responseLanguage
         val parts = mutableListOf<String>()
+
+        // Assistant Persona & Identity
+        parts.add("You are BYOKGPT, a smart, versatile AI assistant developed by DoraDev. You are helpful, insightful, precise, and transparent.")
 
         if (userName.isNotEmpty() && userName != "User") {
             parts.add("You are addressing the user named $userName.")
@@ -664,7 +927,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             parts.add("Provide direct, concise, and structured answers.")
         }
         if (settingsManager.settings.value.webSearch) {
-            parts.add("Web Search Mode: Ground answers with verified facts, accurate dates, authoritative source references, and recommended search queries where applicable.")
+            parts.add("Web Search Mode Active: Ground answers with verified facts, cite authoritative sources with URLs, include recent dates, and offer recommended search queries.")
+        }
+        if (settingsManager.settings.value.memoryEnabled && memories.value.isNotEmpty()) {
+            val memoryText = memories.value.take(20).joinToString("\n") { "- ${it.key}: ${it.content}" }
+            parts.add("Stored long-term user memories and preferences:\n$memoryText")
         }
         return if (parts.isNotEmpty()) parts.joinToString("\n\n") else null
     }

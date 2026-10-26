@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -116,56 +118,53 @@ fun ChatMessageBubble(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
-            // Message Body Container
-            Column(
-                modifier = Modifier
-                    .widthIn(max = 320.dp)
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 18.dp,
-                            topEnd = 18.dp,
-                            bottomStart = if (isUser) 18.dp else 4.dp,
-                            bottomEnd = if (isUser) 4.dp else 18.dp
+            if (isUser) {
+                // User Message: Styled rounded colored bubble
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 320.dp)
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = 18.dp,
+                                topEnd = 18.dp,
+                                bottomStart = 18.dp,
+                                bottomEnd = 4.dp
+                            )
                         )
-                    )
-                    .background(
-                        if (isUser) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceContainerHighest
-                    )
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                // Render attachment preview in user message if present
-                if (isUser && !message.attachmentName.isNullOrEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (message.attachmentMime?.startsWith("image/") == true) Icons.Default.Image
-                            else Icons.Default.Description,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = message.attachmentName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    // Render attachment preview in user message if present
+                    if (!message.attachmentName.isNullOrEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (message.attachmentMime?.startsWith("image/") == true) Icons.Default.Image
+                                else Icons.Default.Description,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = message.attachmentName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (message.content.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
-                    if (message.content.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                }
 
-                if (isUser) {
                     if (message.content.isNotEmpty()) {
                         Text(
                             text = message.content,
@@ -173,7 +172,27 @@ fun ChatMessageBubble(
                             color = Color.White
                         )
                     }
-                } else {
+                }
+            } else {
+                // Assistant Message: Plain, borderless text directly on canvas (NO bubble box)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(top = 4.dp, end = 4.dp)
+                ) {
+                    // Generated image preview if available
+                    if (!message.generatedImageUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = message.generatedImageUrl,
+                            contentDescription = "Generated Image",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 320.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     // Assistant content or Error / Loading
                     when (message.status) {
                         MessageStatus.STREAMING.name -> {

@@ -29,7 +29,8 @@ class SettingsManager(context: Context) {
             webSearch = prefs.getBoolean("web_search", false),
             visualAnswers = prefs.getBoolean("visual_answers", true),
             appLockEnabled = prefs.getBoolean("app_lock_enabled", false),
-            pinCode = prefs.getString("pin_code", "") ?: ""
+            pinCode = prefs.getString("pin_code", "") ?: "",
+            memoryEnabled = prefs.getBoolean("memory_enabled", true)
         )
     }
 
@@ -74,6 +75,11 @@ class SettingsManager(context: Context) {
             .putString("pin_code", pin)
             .apply()
         _settings.value = _settings.value.copy(appLockEnabled = enabled, pinCode = pin)
+    }
+
+    fun updateMemoryEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("memory_enabled", enabled).apply()
+        _settings.value = _settings.value.copy(memoryEnabled = enabled)
     }
 
     fun getMemorySummary(contextList: List<String>): String {

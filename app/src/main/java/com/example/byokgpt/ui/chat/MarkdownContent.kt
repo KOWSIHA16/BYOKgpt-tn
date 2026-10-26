@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -246,56 +248,97 @@ fun RenderFormattedText(
     textColor: Color,
     onUrlClicked: ((String) -> Unit)? = null
 ) {
-    val annotated = remember(text, textColor) {
-        buildAnnotatedStringWithFormatting(text, textColor)
+    val linkColor = MaterialTheme.colorScheme.primary
+    val annotated = remember(text, textColor, linkColor) {
+        buildAnnotatedStringWithFormatting(text, textColor, linkColor)
     }
 
-    Text(
+    ClickableText(
         text = annotated,
-        style = MaterialTheme.typography.bodyLarge,
-        lineHeight = 22.sp
+        style = MaterialTheme.typography.bodyLarge.copy(color = textColor, lineHeight = 22.sp),
+        onClick = { offset ->
+            annotated.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                .firstOrNull()?.let { annotation ->
+                    onUrlClicked?.invoke(annotation.item)
+                }
+        }
     )
 }
 
-fun buildAnnotatedStringWithFormatting(text: String, baseColor: Color): AnnotatedString {
+fun buildAnnotatedStringWithFormatting(
+    text: String,
+    baseColor: Color,
+    linkColor: Color
+): AnnotatedString {
     return buildAnnotatedString {
         var cursor = 0
+        val mdLinkRegex = Regex("""^\[([^\]]+)\]\((https?://[^\s)]+)\)""")
+        val urlRegex = Regex("""^https?://[^\s)\]]+""")
+
         while (cursor < text.length) {
-            val boldIdx = text.indexOf("**", cursor)
-            val inlineCodeIdx = text.indexOf("`", cursor)
+            val remaining = text.substring(cursor)
 
-            // Find next token
-            val nextToken = listOfNotNull(
-                if (boldIdx != -1) boldIdx to "bold" else null,
-                if (inlineCodeIdx != -1) inlineCodeIdx to "code" else null
-            ).minByOrNull { it.first }
-
-            if (nextToken == null) {
-                append(text.substring(cursor))
-                break
+            // 1. Check for markdown link [text](url)
+            val mdMatch = mdLinkRegex.find(remaining)
+            if (mdMatch != null && mdMatch.range.first == 0) {
+                val label = mdMatch.groupValues[1]
+                val url = mdMatch.groupValues[2]
+                pushStringAnnotation(tag = "URL", annotation = url)
+                pushStyle(
+                    SpanStyle(
+                        color = linkColor,
+                        textDecoration = TextDecoration.Underline,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+                append(label)
+                pop()
+                pop()
+                cursor += mdMatch.value.length
+                continue
             }
 
-            // Append text before token
-            if (nextToken.first > cursor) {
-                append(text.substring(cursor, nextToken.first))
+            // 2. Check for plain URL http(s)://
+            val urlMatch = urlRegex.find(remaining)
+            if (urlMatch != null && urlMatch.range.first == 0) {
+                val url = urlMatch.value
+                pushStringAnnotation(tag = "URL", annotation = url)
+                pushStyle(
+                    SpanStyle(
+                        color = linkColor,
+                        textDecoration = TextDecoration.Underline,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+                append(url)
+                pop()
+                pop()
+                cursor += url.length
+                continue
             }
 
-            if (nextToken.second == "bold") {
-                val endBold = text.indexOf("**", nextToken.first + 2)
+            // 3. Check for bold **...**
+            if (remaining.startsWith("**")) {
+                val endBold = remaining.indexOf("**", 2)
                 if (endBold != -1) {
-                    val boldText = text.substring(nextToken.first + 2, endBold)
+                    val boldText = remaining.substring(2, endBold)
                     pushStyle(SpanStyle(fontWeight = FontWeight.Bold, color = baseColor))
                     append(boldText)
                     pop()
-                    cursor = endBold + 2
+                    cursor += endBold + 2
+                    continue
                 } else {
                     append("**")
-                    cursor = nextToken.first + 2
+                    cursor += 2
+                    continue
                 }
-            } else if (nextToken.second == "code") {
-                val endCode = text.indexOf("`", nextToken.first + 1)
+            }
+
+            // 4. Check for inline code `...`
+            if (remaining.startsWith("`")) {
+                val endCode = remaining.indexOf("`", 1)
                 if (endCode != -1) {
-                    val codeSnippet = text.substring(nextToken.first + 1, endCode)
+                    val codeSnippet = remaining.substring(1, endCode)
                     pushStyle(
                         SpanStyle(
                             fontFamily = FontFamily.Monospace,
@@ -306,11 +349,30 @@ fun buildAnnotatedStringWithFormatting(text: String, baseColor: Color): Annotate
                     )
                     append(" $codeSnippet ")
                     pop()
-                    cursor = endCode + 1
+                    cursor += endCode + 1
+                    continue
                 } else {
                     append("`")
-                    cursor = nextToken.first + 1
+                    cursor += 1
+                    continue
                 }
+            }
+
+            // Next special token
+            val nextSpecial = listOfNotNull(
+                remaining.indexOf('[').takeIf { it != -1 },
+                remaining.indexOf("http://").takeIf { it != -1 },
+                remaining.indexOf("https://").takeIf { it != -1 },
+                remaining.indexOf("**").takeIf { it != -1 },
+                remaining.indexOf('`').takeIf { it != -1 }
+            ).minOrNull()
+
+            if (nextSpecial != null && nextSpecial > 0) {
+                append(remaining.substring(0, nextSpecial))
+                cursor += nextSpecial
+            } else {
+                append(remaining[0])
+                cursor += 1
             }
         }
     }

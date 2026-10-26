@@ -55,7 +55,8 @@ object ModelCatalog {
         AiModel("gemini-3.5-flash", "Gemini 3.5 Flash", AiProvider.GEMINI, "Fast, intelligent flagship multimodal model"),
         AiModel("gemini-flash-latest", "Gemini Flash (Latest)", AiProvider.GEMINI, "Latest stable fast Gemini model"),
         AiModel("gemini-3.8-flash", "Gemini 3.8 Flash", AiProvider.GEMINI, "Frontier high-speed thinking model"),
-        AiModel("gemini-1.5-flash", "Gemini 1.5 Flash (Legacy)", AiProvider.GEMINI, "Legacy 1.5 generation model"),
+        AiModel("gemini-2.5-flash", "Gemini 2.5 Flash", AiProvider.GEMINI, "Balanced multimodal reasoning model"),
+        AiModel("gemini-1.5-flash", "Gemini 1.5 Flash (Legacy)", AiProvider.GEMINI, "Legacy model - automatically routed to Gemini 3.5 Flash"),
 
         // Anthropic Claude (Second)
         AiModel("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet", AiProvider.CLAUDE, "Most intelligent Claude model"),
@@ -152,7 +153,8 @@ data class AppSettings(
     val webSearch: Boolean = false,
     val visualAnswers: Boolean = true,
     val appLockEnabled: Boolean = false,
-    val pinCode: String = ""
+    val pinCode: String = "",
+    val memoryEnabled: Boolean = true
 )
 
 sealed class StreamChunk {
@@ -203,4 +205,9 @@ data class TurnTimings(
         "T4->T5 (Stream): ${t4ToT5Ms}ms | " +
         "Total: ${totalLatencyMs}ms" +
         (if (errorMessage != null) " | Error: $errorMessage" else "")
+}
+
+enum class AppMode {
+    AI,
+    BROWSER
 }

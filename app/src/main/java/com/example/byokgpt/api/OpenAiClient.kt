@@ -227,4 +227,62 @@ class OpenAiClient(
                 Result.failure(Exception(LogSanitizer.sanitizeLog(e.message ?: "Connection error")))
             }
         }
+
+    override suspend fun generateImage(
+        prompt: String,
+        config: ProviderConfig,
+        baseImageBase64: String?
+    ): Result<String> = withContext(Dispatchers.IO) {
+        if (config.apiKey.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("No API key configured for OpenAI."))
+        }
+        val baseUrl = if (config.customEndpoint.isNotBlank()) config.customEndpoint.trimEnd('/') else "https://api.openai.com/v1"
+        val url = "$baseUrl/images/generations"
+
+        val requestJson = JSONObject().apply {
+            put("model", "dall-e-3")
+            put("prompt", prompt)
+            put("n", 1)
+            put("size", "1024x1024")
+            put("response_format", "url")
+        }
+
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", "Bearer ${config.apiKey}")
+            .addHeader("Content-Type", "application/json")
+            .post(requestJson.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        try {
+            val response = httpClient.newCall(request).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string() ?: ""
+                val json = JSONObject(body)
+                val data = json.getJSONArray("data")
+                if (data.length() > 0) {
+                    val first = data.getJSONObject(0)
+                    val imageUrl = first.optString("url", "")
+                    if (imageUrl.isNotBlank()) {
+                        return@withContext Result.success(imageUrl)
+                    }
+                    val b64 = first.optString("b64_json", "")
+                    if (b64.isNotBlank()) {
+                        return@withContext Result.success("data:image/png;base64,$b64")
+                    }
+                }
+                Result.failure(Exception("No image returned from OpenAI"))
+            } else {
+                val errorBody = response.body?.string() ?: ""
+                val msg = try {
+                    JSONObject(errorBody).getJSONObject("error").getString("message")
+                } catch (_: Exception) {
+                    "HTTP ${response.code}: ${response.message}"
+                }
+                Result.failure(Exception(LogSanitizer.sanitizeLog(msg)))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(LogSanitizer.sanitizeLog(e.message ?: "Failed to generate image")))
+        }
+    }
 }

@@ -3,21 +3,41 @@ package com.example.byokgpt.model
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.Base64
-import java.io.InputStream
+import com.example.byokgpt.util.DocumentParser
 
 data class Attachment(
     val uriString: String,
     val fileName: String,
     val mimeType: String,
     val sizeBytes: Long,
-    val base64Data: String = ""
+    val base64Data: String = "",
+    val extractedText: String? = null
 ) {
     val isImage: Boolean
         get() = mimeType.startsWith("image/")
 
     val isPdf: Boolean
-        get() = mimeType == "application/pdf"
+        get() = mimeType == "application/pdf" || fileName.endsWith(".pdf", ignoreCase = true)
+
+    val isTextOrCode: Boolean
+        get() = mimeType.startsWith("text/") ||
+                fileName.endsWith(".txt", ignoreCase = true) ||
+                fileName.endsWith(".json", ignoreCase = true) ||
+                fileName.endsWith(".xml", ignoreCase = true) ||
+                fileName.endsWith(".csv", ignoreCase = true) ||
+                fileName.endsWith(".kt", ignoreCase = true) ||
+                fileName.endsWith(".java", ignoreCase = true) ||
+                fileName.endsWith(".py", ignoreCase = true) ||
+                fileName.endsWith(".js", ignoreCase = true) ||
+                fileName.endsWith(".ts", ignoreCase = true)
+
+    val isOfficeDoc: Boolean
+        get() = fileName.endsWith(".docx", ignoreCase = true) ||
+                fileName.endsWith(".xlsx", ignoreCase = true) ||
+                fileName.endsWith(".pptx", ignoreCase = true)
+
+    val isZip: Boolean
+        get() = mimeType.contains("zip") || fileName.endsWith(".zip", ignoreCase = true)
 }
 
 sealed class AttachmentValidationResult {
@@ -29,31 +49,42 @@ sealed class AttachmentValidationResult {
 
 object AttachmentValidator {
     const val MAX_SIZE_BYTES: Long = 10 * 1024 * 1024 // 10 MB
-
-    val SUPPORTED_MIME_TYPES = setOf(
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "application/pdf"
-    )
-
     const val MAX_FILES: Int = 5
 
-    fun validate(mimeType: String?, sizeBytes: Long): AttachmentValidationResult {
-        if (mimeType == null || !SUPPORTED_MIME_TYPES.contains(mimeType.lowercase())) {
-            return AttachmentValidationResult.UnsupportedType(mimeType ?: "unknown")
-        }
+    private val SUPPORTED_EXTENSIONS = setOf(
+        "jpg", "jpeg", "png", "webp", "gif",
+        "pdf", "txt", "csv", "json", "xml", "html", "htm", "css", "js", "ts",
+        "kt", "kts", "java", "py", "c", "cpp", "h", "cs", "go", "rs", "rb", "php",
+        "swift", "sh", "sql", "md", "yaml", "yml", "toml", "docx", "xlsx", "pptx", "zip"
+    )
+
+    fun validate(fileName: String, mimeType: String?, sizeBytes: Long): AttachmentValidationResult {
         if (sizeBytes > MAX_SIZE_BYTES) {
             return AttachmentValidationResult.FileTooLarge(sizeBytes, MAX_SIZE_BYTES)
         }
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        val isSupportedExt = ext.isNotEmpty() && SUPPORTED_EXTENSIONS.contains(ext)
+        val isSupportedMime = mimeType?.let { m ->
+            m.startsWith("image/") || m.startsWith("text/") ||
+            m == "application/pdf" || m == "application/json" || m == "application/xml" ||
+            m.contains("zip") || m.contains("word") || m.contains("spreadsheet") || m.contains("presentation")
+        } ?: false
+
+        if (!isSupportedExt && !isSupportedMime) {
+            return AttachmentValidationResult.UnsupportedType(mimeType ?: ext)
+        }
         return AttachmentValidationResult.Valid
+    }
+
+    fun validate(mimeType: String?, sizeBytes: Long): AttachmentValidationResult {
+        return validate(fileName = "file", mimeType = mimeType, sizeBytes = sizeBytes)
     }
 
     fun validateCumulative(existing: List<Attachment>, newAttachment: Attachment): AttachmentValidationResult {
         if (existing.size >= MAX_FILES) {
             return AttachmentValidationResult.Error("Maximum $MAX_FILES attachments allowed per message.")
         }
-        val singleVal = validate(newAttachment.mimeType, newAttachment.sizeBytes)
+        val singleVal = validate(newAttachment.fileName, newAttachment.mimeType, newAttachment.sizeBytes)
         if (singleVal !is AttachmentValidationResult.Valid) {
             return singleVal
         }
@@ -76,34 +107,33 @@ object AttachmentValidator {
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
                 if (cursor.moveToFirst()) {
-                    if (nameIndex != -1) fileName = cursor.getString(nameIndex)
+                    if (nameIndex != -1) fileName = cursor.getString(nameIndex) ?: "attachment"
                     if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
                 }
             }
 
-            val validation = validate(mimeType, fileSize)
+            val validation = validate(fileName, mimeType, fileSize)
             when (validation) {
                 is AttachmentValidationResult.FileTooLarge -> {
-                    return Result.failure(IllegalArgumentException("File size exceeds 10MB limit."))
+                    return Result.failure(IllegalArgumentException("File '${fileName}' exceeds the 10MB limit."))
                 }
                 is AttachmentValidationResult.UnsupportedType -> {
-                    return Result.failure(IllegalArgumentException("Unsupported file type: $mimeType. Supported formats: JPEG, PNG, WEBP, PDF."))
+                    return Result.failure(IllegalArgumentException("Unsupported file type: ${validation.mimeType}."))
                 }
                 is AttachmentValidationResult.Error -> {
                     return Result.failure(IllegalArgumentException(validation.message))
                 }
                 is AttachmentValidationResult.Valid -> {
-                    // Read file bytes and encode to base64
-                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: return Result.failure(IllegalArgumentException("Unable to read attachment data."))
-                    val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    // Deep document parsing: extract text or scale image base64
+                    val parsed = DocumentParser.parseUri(context, uri, fileName, mimeType, fileSize)
                     Result.success(
                         Attachment(
                             uriString = uri.toString(),
                             fileName = fileName,
-                            mimeType = mimeType,
-                            sizeBytes = bytes.size.toLong(),
-                            base64Data = base64
+                            mimeType = parsed.mimeType,
+                            sizeBytes = if (parsed.sizeBytes > 0) parsed.sizeBytes else fileSize,
+                            base64Data = parsed.imageBase64 ?: "",
+                            extractedText = parsed.textContent
                         )
                     )
                 }

@@ -20,9 +20,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,7 +33,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,12 +119,45 @@ fun ConversationDrawerContent(
                 Text(text = stringResource(R.string.new_chat), fontWeight = FontWeight.SemiBold)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            var selectedTab by remember { mutableIntStateOf(0) }
+            val filteredConversations = remember(conversations, selectedTab) {
+                when (selectedTab) {
+                    1 -> conversations.filter { it.sessionType != "WEB_SEARCH" }
+                    2 -> conversations.filter { it.sessionType == "WEB_SEARCH" }
+                    else -> conversations
+                }
+            }
+
+            // Session History Filter Tabs
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                FilterChip(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    label = { Text("All (${conversations.size})", fontSize = 11.sp) }
+                )
+                FilterChip(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    label = { Text("Chats", fontSize = 11.sp) }
+                )
+                FilterChip(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    label = { Text("Web", fontSize = 11.sp) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(modifier = Modifier.height(8.dp))
 
             // Conversations List
-            if (conversations.isEmpty()) {
+            if (filteredConversations.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -126,7 +165,7 @@ fun ConversationDrawerContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No saved conversations",
+                        text = if (selectedTab == 2) "No web search sessions" else "No saved conversations",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -136,8 +175,9 @@ fun ConversationDrawerContent(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(conversations) { conv ->
+                    items(filteredConversations) { conv ->
                         val isSelected = conv.id == currentConversationId
+                        val isWeb = conv.sessionType == "WEB_SEARCH"
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -156,7 +196,7 @@ fun ConversationDrawerContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.ChatBubbleOutline,
+                                    imageVector = if (isWeb) Icons.Default.Search else Icons.Default.ChatBubbleOutline,
                                     contentDescription = null,
                                     tint = if (isSelected) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -173,8 +213,9 @@ fun ConversationDrawerContent(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    val sessionPrefix = if (isWeb) "Web • " else ""
                                     Text(
-                                        text = "${conv.provider.lowercase().replaceFirstChar { it.uppercase() }} • ${dateFormat.format(Date(conv.updatedAt))}",
+                                        text = "$sessionPrefix${conv.provider.lowercase().replaceFirstChar { it.uppercase() }} • ${dateFormat.format(Date(conv.updatedAt))}",
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

@@ -24,6 +24,17 @@ class GeminiClient(
     private val httpClient: OkHttpClient = NetworkClient.sharedHttpClient
 ) : AiClient {
 
+    companion object {
+        fun resolveModel(requestedModel: String): String {
+            val trimmed = requestedModel.trim().lowercase().removePrefix("models/")
+            return when (trimmed) {
+                "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash-001", "gemini-1.5-flash-002", "gemini-1.5-flash-8b", "gemini-1.0-pro", "gemini-pro" -> "gemini-3.5-flash"
+                "gemini-1.5-pro", "gemini-1.5-pro-latest", "gemini-1.5-pro-001", "gemini-1.5-pro-002" -> "gemini-2.5-pro"
+                else -> trimmed
+            }
+        }
+    }
+
     override fun streamChat(
         messages: List<MessageEntity>,
         systemPrompt: String?,
@@ -42,9 +53,10 @@ class GeminiClient(
             "https://generativelanguage.googleapis.com"
         }
 
+        val effectiveModel = resolveModel(model)
         val cleanKey = config.apiKey.trim()
         val encodedKey = java.net.URLEncoder.encode(cleanKey, "UTF-8")
-        val url = "$baseUrl/v1beta/models/$model:streamGenerateContent?alt=sse&key=$encodedKey"
+        val url = "$baseUrl/v1beta/models/$effectiveModel:streamGenerateContent?alt=sse&key=$encodedKey"
 
         val requestJson = JSONObject()
 
@@ -96,7 +108,21 @@ class GeminiClient(
         val fullTextBuilder = StringBuilder()
 
         try {
-            val response = call.execute()
+            var response = call.execute()
+
+            // If requested model returns 404 NOT_FOUND, seamlessly retry with Gemini 3.5 Flash
+            if (!response.isSuccessful && response.code == 404 && effectiveModel != "gemini-3.5-flash") {
+                val fallbackUrl = "$baseUrl/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse&key=$encodedKey"
+                val fallbackRequest = Request.Builder()
+                    .url(fallbackUrl)
+                    .addHeader("x-goog-api-key", cleanKey)
+                    .post(requestBody)
+                    .build()
+                val fallbackCall = httpClient.newCall(fallbackRequest)
+                onCallCreated?.invoke(fallbackCall)
+                response = fallbackCall.execute()
+            }
+
             if (!response.isSuccessful) {
                 val errorBody = response.body?.string() ?: ""
                 var errorMessage = "Google Gemini HTTP ${response.code}: ${response.message}"
@@ -108,7 +134,7 @@ class GeminiClient(
                     errorMessage = errJson.optString("message", errorMessage)
                     val status = errJson.optString("status", "")
                     if (response.code == 404 || status.contains("NOT_FOUND", ignoreCase = true)) {
-                        errorMessage = "Model '$model' is not available. Please switch to Gemini 3.5 Flash in the model picker."
+                        errorMessage = "Model '$effectiveModel' is not available. Please switch to Gemini 3.5 Flash in the model picker."
                     } else if (status.equals("RESOURCE_EXHAUSTED", ignoreCase = true) || isRateLimit) {
                         isRateLimit = true
                         errorMessage = "Gemini quota or rate limit exceeded. Please check your account usage or try another provider."
@@ -190,9 +216,10 @@ class GeminiClient(
             } else {
                 "https://generativelanguage.googleapis.com"
             }
+            val effectiveModel = resolveModel(model)
             val cleanKey = config.apiKey.trim()
             val encodedKey = java.net.URLEncoder.encode(cleanKey, "UTF-8")
-            val url = "$baseUrl/v1beta/models/$model:generateContent?key=$encodedKey"
+            val url = "$baseUrl/v1beta/models/$effectiveModel:generateContent?key=$encodedKey"
 
             val requestJson = JSONObject().apply {
                 val contents = JSONArray().apply {
@@ -213,9 +240,19 @@ class GeminiClient(
                 .build()
 
             try {
-                val response = httpClient.newCall(request).execute()
+                var response = httpClient.newCall(request).execute()
+                if (!response.isSuccessful && response.code == 404 && effectiveModel != "gemini-3.5-flash") {
+                    val fallbackUrl = "$baseUrl/v1beta/models/gemini-3.5-flash:generateContent?key=$encodedKey"
+                    val fallbackRequest = Request.Builder()
+                        .url(fallbackUrl)
+                        .addHeader("x-goog-api-key", cleanKey)
+                        .post(requestJson.toString().toRequestBody("application/json".toMediaType()))
+                        .build()
+                    response = httpClient.newCall(fallbackRequest).execute()
+                }
+
                 if (response.isSuccessful) {
-                    Result.success("Connection to Google Gemini ($model) verified successfully!")
+                    Result.success("Connection to Google Gemini ($effectiveModel) verified successfully!")
                 } else {
                     val errorBody = response.body?.string() ?: ""
                     val msg = try {
@@ -229,4 +266,65 @@ class GeminiClient(
                 Result.failure(Exception(LogSanitizer.sanitizeLog(e.message ?: "Connection error")))
             }
         }
+
+    override suspend fun generateImage(
+        prompt: String,
+        config: ProviderConfig,
+        baseImageBase64: String?
+    ): Result<String> = withContext(Dispatchers.IO) {
+        if (config.apiKey.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("No API key configured for Google Gemini."))
+        }
+        val baseUrl = if (config.customEndpoint.isNotBlank()) config.customEndpoint.trimEnd('/') else "https://generativelanguage.googleapis.com"
+        val cleanKey = config.apiKey.trim()
+        val encodedKey = java.net.URLEncoder.encode(cleanKey, "UTF-8")
+        val url = "$baseUrl/v1beta/models/imagen-3.0-generate-002:predict?key=$encodedKey"
+
+        val requestJson = JSONObject().apply {
+            val instances = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("prompt", prompt)
+                })
+            }
+            put("instances", instances)
+            put("parameters", JSONObject().apply {
+                put("sampleCount", 1)
+                put("aspectRatio", "1:1")
+            })
+        }
+
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("x-goog-api-key", cleanKey)
+            .addHeader("Content-Type", "application/json")
+            .post(requestJson.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        try {
+            val response = httpClient.newCall(request).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string() ?: ""
+                val json = JSONObject(body)
+                val predictions = json.optJSONArray("predictions")
+                if (predictions != null && predictions.length() > 0) {
+                    val first = predictions.getJSONObject(0)
+                    val bytesBase64 = first.optString("bytesBase64Encoded", "")
+                    if (bytesBase64.isNotBlank()) {
+                        return@withContext Result.success("data:image/jpeg;base64,$bytesBase64")
+                    }
+                }
+                Result.failure(Exception("No image returned from Gemini Imagen"))
+            } else {
+                val errorBody = response.body?.string() ?: ""
+                val msg = try {
+                    JSONObject(errorBody).getJSONObject("error").getString("message")
+                } catch (_: Exception) {
+                    "HTTP ${response.code}: ${response.message}"
+                }
+                Result.failure(Exception(LogSanitizer.sanitizeLog(msg)))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(LogSanitizer.sanitizeLog(e.message ?: "Failed to generate image with Gemini")))
+        }
+    }
 }

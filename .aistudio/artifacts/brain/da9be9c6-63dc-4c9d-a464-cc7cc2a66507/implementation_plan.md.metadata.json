@@ -1,6 +1,6 @@
 {
-  "summary":  "Comprehensive implementation plan for BYOKGPT covering app logo replacement, verified provider connection status, multi-file Claude-style attachment carousel with 10MB validation, response language selection in chat header and settings, Google-powered web search grounding and embedded in-app browser sheet, rich Markdown rendering with syntax-highlighted code blocks, and rock-solid async streaming and error recovery.",
-  "updatedAt":  "2026-10-24T10:35:34.575674348Z",
+  "summary":  "Comprehensive implementation plan for BYOKGPT enhancements:\n- Web Search & In-App Browser overhaul with single persistent Settings toggle, subtle active mode indicator, separate chat histories for Normal and Web sessions, and direct web content summarization\n- Removal of both globe icons (composer toggle and top bar quick language chip)\n- Removal of AI response bubble box for a modern, borderless layout while retaining user message bubbles\n- Functional Long-term Memory Summary with automatic background extraction, manual add/edit/delete, and Room persistence\n- Expanded file parser supporting PDF, TXT, CSV, JSON, XML, DOCX, XLSX, and code files with real text content extraction passed to LLMs\n- Native image generation and editing using configured provider models with progress animations\n- Fixed chat reliability, coroutine async streaming, and BYOKGPT DoraDev identity system prompts",
+  "updatedAt":  "2026-10-25T07:02:55.349258513Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
