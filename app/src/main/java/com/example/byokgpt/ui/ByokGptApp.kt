@@ -10,8 +10,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.byokgpt.model.ThemeMode
+import com.example.byokgpt.security.AppLockManager
 import com.example.byokgpt.ui.chat.ChatScreen
 import com.example.byokgpt.ui.chat.ChatViewModel
+import com.example.byokgpt.ui.security.AppLockScreen
 import com.example.byokgpt.ui.settings.SettingsScreen
 import com.example.ui.theme.ByokGptTheme
 
@@ -24,6 +26,7 @@ fun ByokGptApp(
 ) {
     val navController = rememberNavController()
     val settings by chatViewModel.settingsManager.settings.collectAsState()
+    val isAppLocked by AppLockManager.isLocked.collectAsState()
 
     val isDark = when (settings.themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -32,10 +35,16 @@ fun ByokGptApp(
     }
 
     ByokGptTheme(darkTheme = isDark) {
-        NavHost(
-            navController = navController,
-            startDestination = ROUTE_CHAT
-        ) {
+        if (isAppLocked) {
+            AppLockScreen(
+                secureKeyStorage = chatViewModel.secureKeyStorage,
+                onUnlocked = {}
+            )
+        } else {
+            NavHost(
+                navController = navController,
+                startDestination = ROUTE_CHAT
+            ) {
             composable(ROUTE_CHAT) {
                 ChatScreen(
                     viewModel = chatViewModel,
@@ -58,4 +67,5 @@ fun ByokGptApp(
             }
         }
     }
+}
 }

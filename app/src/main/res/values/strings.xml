@@ -66,6 +66,12 @@
     
     <string name="sec_security">App Lock &amp; Security</string>
     <string name="sec_security_desc">PIN lock, biometric check, and Keystore status</string>
+    <string name="pin_lock_title">App Lock (PIN)</string>
+    <string name="pin_lock_desc">Lock app on launch and returning from background</string>
+    <string name="biometric_unlock_title">Biometric Unlock</string>
+    <string name="biometric_unlock_desc">Use fingerprint or face recognition to unlock</string>
+    <string name="sec_image_gen">Image Generation Engine</string>
+    <string name="sec_image_gen_desc">Configure AI image generation provider</string>
     
     <string name="sec_about">About BYOKGPT</string>
     <string name="sec_about_desc">Version, developer details &amp; communities</string>

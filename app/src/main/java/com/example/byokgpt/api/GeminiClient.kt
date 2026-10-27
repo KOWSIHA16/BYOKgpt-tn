@@ -21,17 +21,13 @@ import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 
 class GeminiClient(
-    private val httpClient: OkHttpClient = NetworkClient.sharedHttpClient
+    private val httpClient: OkHttpClient = NetworkClient.streamingHttpClient
 ) : AiClient {
 
     companion object {
         fun resolveModel(requestedModel: String): String {
-            val trimmed = requestedModel.trim().lowercase().removePrefix("models/")
-            return when (trimmed) {
-                "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash-001", "gemini-1.5-flash-002", "gemini-1.5-flash-8b", "gemini-1.0-pro", "gemini-pro" -> "gemini-3.5-flash"
-                "gemini-1.5-pro", "gemini-1.5-pro-latest", "gemini-1.5-pro-001", "gemini-1.5-pro-002" -> "gemini-2.5-pro"
-                else -> trimmed
-            }
+            // As requested, Gemini text chat exclusively uses "gemini-3.8-flash"
+            return "gemini-3.8-flash"
         }
     }
 
@@ -95,6 +91,15 @@ class GeminiClient(
         }
         requestJson.put("contents", contentsArray)
 
+        // Optimize latency for Gemini 3.8 Flash by setting thinking level to LOW
+        val genConfig = JSONObject().apply {
+            val thinkingConfig = JSONObject().apply {
+                put("thinking_level", "LOW")
+            }
+            put("thinkingConfig", thinkingConfig)
+        }
+        requestJson.put("generationConfig", genConfig)
+
         val requestBody = requestJson.toString().toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
             .url(url)
@@ -110,9 +115,9 @@ class GeminiClient(
         try {
             var response = call.execute()
 
-            // If requested model returns 404 NOT_FOUND, seamlessly retry with Gemini 3.5 Flash
-            if (!response.isSuccessful && response.code == 404 && effectiveModel != "gemini-3.5-flash") {
-                val fallbackUrl = "$baseUrl/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse&key=$encodedKey"
+            // If requested model returns 404 NOT_FOUND, seamlessly retry with gemini-3.8-flash
+            if (!response.isSuccessful && response.code == 404 && effectiveModel != "gemini-3.8-flash") {
+                val fallbackUrl = "$baseUrl/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse&key=$encodedKey"
                 val fallbackRequest = Request.Builder()
                     .url(fallbackUrl)
                     .addHeader("x-goog-api-key", cleanKey)
@@ -134,7 +139,7 @@ class GeminiClient(
                     errorMessage = errJson.optString("message", errorMessage)
                     val status = errJson.optString("status", "")
                     if (response.code == 404 || status.contains("NOT_FOUND", ignoreCase = true)) {
-                        errorMessage = "Model '$effectiveModel' is not available. Please switch to Gemini 3.5 Flash in the model picker."
+                        errorMessage = "Model '$effectiveModel' endpoint was not found. Please verify your Gemini API key and project permissions."
                     } else if (status.equals("RESOURCE_EXHAUSTED", ignoreCase = true) || isRateLimit) {
                         isRateLimit = true
                         errorMessage = "Gemini quota or rate limit exceeded. Please check your account usage or try another provider."
@@ -201,7 +206,13 @@ class GeminiClient(
                 // User intentionally cancelled stream
                 return@flow
             }
-            emit(StreamChunk.Error(LogSanitizer.sanitizeLog(e.localizedMessage ?: "Network error connecting to Gemini API.")))
+            val raw = e.localizedMessage ?: "Network error connecting to Gemini API."
+            val friendly = if (raw.contains("timeout", ignoreCase = true)) {
+                "Connection to Google Gemini timed out. Please check your internet connection and verify your API key."
+            } else {
+                raw
+            }
+            emit(StreamChunk.Error(LogSanitizer.sanitizeLog(friendly)))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -241,8 +252,8 @@ class GeminiClient(
 
             try {
                 var response = httpClient.newCall(request).execute()
-                if (!response.isSuccessful && response.code == 404 && effectiveModel != "gemini-3.5-flash") {
-                    val fallbackUrl = "$baseUrl/v1beta/models/gemini-3.5-flash:generateContent?key=$encodedKey"
+                if (!response.isSuccessful && response.code == 404 && effectiveModel != "gemini-3.8-flash") {
+                    val fallbackUrl = "$baseUrl/v1beta/models/gemini-3.8-flash:generateContent?key=$encodedKey"
                     val fallbackRequest = Request.Builder()
                         .url(fallbackUrl)
                         .addHeader("x-goog-api-key", cleanKey)

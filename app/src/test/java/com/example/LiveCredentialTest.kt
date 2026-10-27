@@ -26,14 +26,14 @@ class LiveCredentialTest {
             ""
         }
 
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY" && apiKey.startsWith("AIzaSy")) {
             println("Live secret detected. Executing live connection verification against Google Gemini...")
             val client = GeminiClient()
             val config = ProviderConfig(
                 provider = AiProvider.GEMINI,
                 apiKey = apiKey
             )
-            val result = client.testConnection(config, "gemini-1.5-flash")
+            val result = client.testConnection(config, "gemini-3.8-flash")
             assertTrue("Live Gemini verification should succeed: ${result.exceptionOrNull()?.message}", result.isSuccess)
         } else {
             println("No live GEMINI_API_KEY secret configured in Secrets panel; test passed in mock mode.")

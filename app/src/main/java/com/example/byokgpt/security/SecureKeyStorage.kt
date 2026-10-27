@@ -219,16 +219,19 @@ class SecureKeyStorage(context: Context) {
     }
 
     fun saveSelectedModel(provider: AiProvider, modelId: String) {
-        prefs.edit().putString("model_${provider.name}", modelId).apply()
+        val targetModel = if (provider == AiProvider.GEMINI) "gemini-3.8-flash" else modelId
+        prefs.edit().putString("model_${provider.name}", targetModel).apply()
     }
 
     fun getSelectedModel(provider: AiProvider): String {
-        val saved = prefs.getString("model_${provider.name}", provider.defaultModel) ?: provider.defaultModel
-        if (provider == AiProvider.GEMINI && (saved == "gemini-1.5-flash" || saved.startsWith("gemini-1.5-"))) {
-            saveSelectedModel(AiProvider.GEMINI, "gemini-3.5-flash")
-            return "gemini-3.5-flash"
+        if (provider == AiProvider.GEMINI) {
+            val saved = prefs.getString("model_${provider.name}", null)
+            if (saved != "gemini-3.8-flash") {
+                saveSelectedModel(AiProvider.GEMINI, "gemini-3.8-flash")
+            }
+            return "gemini-3.8-flash"
         }
-        return saved
+        return prefs.getString("model_${provider.name}", provider.defaultModel) ?: provider.defaultModel
     }
 
     fun saveCurrentProvider(provider: AiProvider) {
@@ -238,5 +241,66 @@ class SecureKeyStorage(context: Context) {
     fun getCurrentProvider(): AiProvider {
         val name = prefs.getString("current_provider", AiProvider.GEMINI.name) ?: AiProvider.GEMINI.name
         return AiProvider.fromString(name)
+    }
+
+    // --- App PIN & Biometric Security ---
+    fun isAppLockEnabled(): Boolean = prefs.getBoolean("app_lock_enabled", false)
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("app_lock_enabled", enabled).apply()
+    }
+
+    fun hasPin(): Boolean = !prefs.getString("app_pin_hash", null).isNullOrEmpty()
+
+    fun setPin(pin: String) {
+        val random = java.security.SecureRandom()
+        val saltBytes = ByteArray(16)
+        random.nextBytes(saltBytes)
+        val salt = Base64.encodeToString(saltBytes, Base64.NO_WRAP)
+
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        digest.update(saltBytes)
+        val hashBytes = digest.digest(pin.toByteArray(Charsets.UTF_8))
+        val hash = Base64.encodeToString(hashBytes, Base64.NO_WRAP)
+
+        prefs.edit()
+            .putString("app_pin_salt", salt)
+            .putString("app_pin_hash", hash)
+            .putBoolean("app_lock_enabled", true)
+            .apply()
+    }
+
+    fun verifyPin(pin: String): Boolean {
+        val salt = prefs.getString("app_pin_salt", null) ?: return false
+        val storedHash = prefs.getString("app_pin_hash", null) ?: return false
+
+        val saltBytes = Base64.decode(salt, Base64.NO_WRAP)
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        digest.update(saltBytes)
+        val hashBytes = digest.digest(pin.toByteArray(Charsets.UTF_8))
+        val computedHash = Base64.encodeToString(hashBytes, Base64.NO_WRAP)
+
+        return computedHash == storedHash
+    }
+
+    fun removePin() {
+        prefs.edit()
+            .remove("app_pin_hash")
+            .remove("app_pin_salt")
+            .putBoolean("app_lock_enabled", false)
+            .apply()
+    }
+
+    fun isBiometricEnabled(): Boolean = prefs.getBoolean("biometric_enabled", true)
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("biometric_enabled", enabled).apply()
+    }
+
+    // --- Image Generation Provider Selection ---
+    fun getImageGenProvider(): String = prefs.getString("image_gen_provider", "POLLINATIONS") ?: "POLLINATIONS"
+
+    fun setImageGenProvider(provider: String) {
+        prefs.edit().putString("image_gen_provider", provider).apply()
     }
 }

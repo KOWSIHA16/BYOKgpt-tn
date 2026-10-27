@@ -24,15 +24,22 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import coil.compose.AsyncImage
+import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,8 +75,12 @@ fun ChatMessageBubble(
     message: MessageEntity,
     isStreaming: Boolean,
     onRetryClicked: () -> Unit,
-    onSwitchProviderClicked: () -> Unit,
-    onDeleteClicked: () -> Unit,
+    onRegenerateClicked: () -> Unit = {},
+    onFeedbackClicked: (isLike: Boolean) -> Unit = {},
+    onShareClicked: () -> Unit = {},
+    onEditClicked: () -> Unit = {},
+    onSwitchProviderClicked: () -> Unit = {},
+    onDeleteClicked: () -> Unit = {},
     onUrlClicked: ((String) -> Unit)? = null,
     onConfigureKeyClicked: ((AiProvider) -> Unit)? = null
 ) {
@@ -166,10 +177,58 @@ fun ChatMessageBubble(
                     }
 
                     if (message.content.isNotEmpty()) {
-                        Text(
-                            text = message.content,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White
+                        MarkdownContent(
+                            content = message.content,
+                            textColor = Color.White,
+                            onUrlClicked = onUrlClicked
+                        )
+                    }
+                }
+
+                // Action Toolbar below User Bubble (Copy, Edit, Delete)
+                Row(
+                    modifier = Modifier.padding(end = 4.dp, top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (message.content.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                clipboardManager.setText(AnnotatedString(message.content))
+                                Toast.makeText(context, context.getString(R.string.copied_to_clipboard), Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = stringResource(R.string.copy),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onEditClicked,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Message",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDeleteClicked,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.delete),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
@@ -354,7 +413,7 @@ fun ChatMessageBubble(
             }
         }
 
-        // Action Toolbar below Assistant Bubble
+        // Action Toolbar below Assistant Bubble (Copy, Like, Dislike, Share, Regenerate, Delete)
         if (!isUser && message.status != MessageStatus.STREAMING.name && message.status != MessageStatus.ERROR.name) {
             Row(
                 modifier = Modifier.padding(start = 40.dp, top = 2.dp),
@@ -362,6 +421,7 @@ fun ChatMessageBubble(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (message.content.isNotEmpty()) {
+                    // Copy
                     IconButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(message.content))
@@ -376,9 +436,61 @@ fun ChatMessageBubble(
                             modifier = Modifier.size(14.dp)
                         )
                     }
-                }
 
-                if (message.status == MessageStatus.CANCELLED.name) {
+                    // Like (Thumbs Up)
+                    val isLiked = message.userFeedback == "LIKE"
+                    IconButton(
+                        onClick = { onFeedbackClicked(true) },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isLiked) Icons.Default.ThumbUp else Icons.Outlined.ThumbUp,
+                            contentDescription = "Like",
+                            tint = if (isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    // Dislike (Thumbs Down)
+                    val isDisliked = message.userFeedback == "DISLIKE"
+                    IconButton(
+                        onClick = { onFeedbackClicked(false) },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isDisliked) Icons.Default.ThumbDown else Icons.Outlined.ThumbDown,
+                            contentDescription = "Dislike",
+                            tint = if (isDisliked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    // Share
+                    IconButton(
+                        onClick = onShareClicked,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    // Regenerate
+                    IconButton(
+                        onClick = onRegenerateClicked,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Regenerate",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                } else if (message.status == MessageStatus.CANCELLED.name) {
                     IconButton(
                         onClick = onRetryClicked,
                         modifier = Modifier.size(28.dp)

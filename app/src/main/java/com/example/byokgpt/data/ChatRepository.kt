@@ -122,6 +122,14 @@ class ChatRepository(private val chatDao: ChatDao) {
         chatDao.deleteMessage(messageId)
     }
 
+    suspend fun updateMessageFeedback(messageId: String, feedback: String?) {
+        chatDao.updateMessageFeedback(messageId, feedback)
+    }
+
+    suspend fun updateMessageContent(messageId: String, content: String) {
+        chatDao.updateMessageContent(messageId, content)
+    }
+
     suspend fun clearAll() {
         chatDao.clearAllConversations()
     }

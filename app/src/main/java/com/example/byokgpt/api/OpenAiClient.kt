@@ -21,7 +21,7 @@ import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 
 class OpenAiClient(
-    private val httpClient: OkHttpClient = NetworkClient.sharedHttpClient
+    private val httpClient: OkHttpClient = NetworkClient.streamingHttpClient
 ) : AiClient {
 
     override fun streamChat(

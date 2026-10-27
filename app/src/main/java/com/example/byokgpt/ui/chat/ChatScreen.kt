@@ -1,5 +1,6 @@
 package com.example.byokgpt.ui.chat
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -724,9 +725,21 @@ fun ChatScreen(
                                 message = message,
                                 isStreaming = isStreaming,
                                 onRetryClicked = { viewModel.retryLastMessage() },
+                                onRegenerateClicked = { viewModel.regenerateMessage(message.id) },
+                                onFeedbackClicked = { isLike -> viewModel.toggleMessageFeedback(message.id, isLike) },
+                                onShareClicked = {
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        putExtra(Intent.EXTRA_TEXT, message.content)
+                                        type = "text/plain"
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Share Message"))
+                                },
+                                onEditClicked = {
+                                    inputText = message.content
+                                },
                                 onSwitchProviderClicked = { showModelPicker = true },
                                 onDeleteClicked = {
-                                    scope.launch { viewModel.repository.deleteMessage(message.id) }
+                                    viewModel.deleteMessage(message.id)
                                 },
                                 onUrlClicked = { url -> viewModel.navigateToBrowserUrl(url) },
                                 onConfigureKeyClicked = { provider ->

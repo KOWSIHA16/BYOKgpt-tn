@@ -297,8 +297,42 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setModel(modelId: String) {
-        _selectedModel.value = modelId
-        secureKeyStorage.saveSelectedModel(_selectedProvider.value, modelId)
+        val targetModel = if (_selectedProvider.value == AiProvider.GEMINI) "gemini-3.8-flash" else modelId
+        _selectedModel.value = targetModel
+        secureKeyStorage.saveSelectedModel(_selectedProvider.value, targetModel)
+    }
+
+    fun deleteMessage(messageId: String) {
+        _currentMessages.update { list -> list.filter { it.id != messageId } }
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteMessage(messageId)
+        }
+    }
+
+    fun toggleMessageFeedback(messageId: String, isLike: Boolean) {
+        val targetFeedback = if (isLike) "LIKE" else "DISLIKE"
+        _currentMessages.update { list ->
+            list.map { msg ->
+                if (msg.id == messageId) {
+                    val newFeedback = if (msg.userFeedback == targetFeedback) null else targetFeedback
+                    msg.copy(userFeedback = newFeedback)
+                } else msg
+            }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = _currentMessages.value.find { it.id == messageId }?.userFeedback
+            repository.updateMessageFeedback(messageId, updated)
+        }
+    }
+
+    fun regenerateMessage(assistantMessageId: String) {
+        val msgs = _currentMessages.value
+        val assistantIdx = msgs.indexOfFirst { it.id == assistantMessageId }
+        if (assistantIdx <= 0) return
+        val userMsg = msgs.take(assistantIdx).lastOrNull { it.role == MessageRole.USER.name } ?: return
+
+        deleteMessage(assistantMessageId)
+        sendMessage(userMsg.content)
     }
 
     /**
@@ -478,8 +512,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             // Check if user is requesting image generation or editing
             val isImageRequest = isImageGenerationRequest(trimmed, primaryAttachment?.isImage == true)
             if (isImageRequest) {
-                if (provider == AiProvider.CLAUDE) {
-                    val errorMsg = "Image generation is not supported by Anthropic Claude directly in BYOKGPT. Please switch to Google Gemini (Imagen 3) or OpenAI (DALL-E 3) using the Model Picker or Settings."
+                val configuredImgProvider = secureKeyStorage.getImageGenProvider()
+                
+                // If Claude is selected and configured specifically for image gen, guide user
+                if (provider == AiProvider.CLAUDE && configuredImgProvider == "CLAUDE") {
+                    val errorMsg = "Image generation is not supported by Anthropic Claude's API. Please switch to Pollinations (Free Flux), Google Gemini (Imagen 3), or OpenAI (DALL-E 3) in Settings."
                     val errorEntity = assistantMessage.copy(
                         conversationId = effectiveConvId,
                         status = MessageStatus.ERROR.name,
@@ -492,22 +529,43 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                // Show in-flight generating state
-                _currentMessages.update { list ->
-                    list.map { if (it.id == assistantMsgId) it.copy(content = "Generating image with ${provider.displayName}...") else it }
+                val targetProviderName = when (configuredImgProvider) {
+                    "POLLINATIONS" -> "Pollinations (Flux Free)"
+                    "GEMINI" -> "Google Gemini (Imagen 3)"
+                    "OPENAI" -> "OpenAI (DALL-E 3)"
+                    else -> if (provider == AiProvider.OPENAI) "OpenAI (DALL-E 3)" else if (provider == AiProvider.GEMINI) "Google Gemini (Imagen 3)" else "Pollinations (Flux Free)"
                 }
 
-                val imgResult = client.generateImage(
-                    prompt = trimmed,
-                    config = config,
-                    baseImageBase64 = primaryAttachment?.base64Data
-                )
+                // Show in-flight generating state
+                _currentMessages.update { list ->
+                    list.map { if (it.id == assistantMsgId) it.copy(content = "Generating image with $targetProviderName...") else it }
+                }
+
+                val imgResult: Result<String> = when {
+                    configuredImgProvider == "POLLINATIONS" -> {
+                        com.example.byokgpt.api.PollinationsImageClient.generateImage(trimmed, primaryAttachment?.base64Data)
+                    }
+                    configuredImgProvider == "GEMINI" || (configuredImgProvider == "AUTO" && provider == AiProvider.GEMINI) -> {
+                        val geminiConfig = ProviderConfig(AiProvider.GEMINI, secureKeyStorage.getApiKey(AiProvider.GEMINI), secureKeyStorage.getCustomEndpoint(AiProvider.GEMINI), "gemini-3.8-flash")
+                        val geminiClient = AiClientFactory.getClient(AiProvider.GEMINI)
+                        geminiClient.generateImage(trimmed, geminiConfig, primaryAttachment?.base64Data)
+                    }
+                    configuredImgProvider == "OPENAI" || (configuredImgProvider == "AUTO" && provider == AiProvider.OPENAI) -> {
+                        val openAiConfig = ProviderConfig(AiProvider.OPENAI, secureKeyStorage.getApiKey(AiProvider.OPENAI), secureKeyStorage.getCustomEndpoint(AiProvider.OPENAI), "gpt-4o-mini")
+                        val openAiClient = AiClientFactory.getClient(AiProvider.OPENAI)
+                        openAiClient.generateImage(trimmed, openAiConfig, primaryAttachment?.base64Data)
+                    }
+                    else -> {
+                        // Default to Pollinations (Free Flux) so generation always works without failing
+                        com.example.byokgpt.api.PollinationsImageClient.generateImage(trimmed, primaryAttachment?.base64Data)
+                    }
+                }
 
                 if (imgResult.isSuccess) {
                     val imgUrl = imgResult.getOrNull()
                     val successEntity = assistantMessage.copy(
                         conversationId = effectiveConvId,
-                        content = "Generated with ${provider.displayName}",
+                        content = "Generated with $targetProviderName",
                         generatedImageUrl = imgUrl,
                         status = MessageStatus.SUCCESS.name
                     )
@@ -529,6 +587,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            // Real-Time Web Search Grounding for live facts, current events, or dates
+            var groundedPrompt = fullPromptText
+            if (com.example.byokgpt.api.RealTimeSearchGrounder.isLiveSearchNeeded(trimmed, settingsManager.settings.value.webSearch)) {
+                _currentMessages.update { list ->
+                    list.map { if (it.id == assistantMsgId) it.copy(content = "Searching the web for latest verified facts...") else it }
+                }
+                try {
+                    val searchResults = com.example.byokgpt.api.RealTimeSearchGrounder.searchWeb(trimmed)
+                    if (searchResults.isNotEmpty()) {
+                        val grounding = com.example.byokgpt.api.RealTimeSearchGrounder.buildGroundingPrompt(trimmed, searchResults)
+                        groundedPrompt += grounding
+                    }
+                } catch (e: Exception) {
+                    Log.w("ChatViewModel", "Real-time search grounding failed", e)
+                }
+            }
+
             // T2: Network request begins
             val t2 = System.currentTimeMillis()
             timings.t2NetworkStartMs = t2
@@ -540,8 +615,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 (msg.content.isNotBlank() || !msg.attachmentBase64.isNullOrEmpty()) &&
                 msg.status != MessageStatus.ERROR.name
             }.map { msg ->
-                if (msg.id == finalUserMsg.id && fullPromptText != trimmed) {
-                    msg.copy(content = fullPromptText)
+                if (msg.id == finalUserMsg.id && groundedPrompt != trimmed) {
+                    msg.copy(content = groundedPrompt)
                 } else msg
             }
 
@@ -627,7 +702,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 if (currentTurnId == turnId && !activeCall?.isCanceled().let { it == true }) {
-                    val errorMsg = LogSanitizer.sanitizeLog(e.localizedMessage ?: "Network connection error.")
+                    val rawMsg = e.localizedMessage ?: "Network connection error."
+                    val errorMsg = if (rawMsg.contains("timeout", ignoreCase = true)) {
+                        "Connection timed out. Please check your internet connection and verify that your API key is valid."
+                    } else {
+                        LogSanitizer.sanitizeLog(rawMsg)
+                    }
                     timings.t5CompletedMs = System.currentTimeMillis()
                     timings.errorMessage = errorMsg
                     _latestTimings.value = timings
@@ -913,6 +993,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         // Assistant Persona & Identity
         parts.add("You are BYOKGPT, a smart, versatile AI assistant developed by DoraDev. You are helpful, insightful, precise, and transparent.")
+
+        // Real-world Temporal Grounding (Fixes wrong date/time answers)
+        val now = java.util.Date()
+        val sdfDate = java.text.SimpleDateFormat("EEEE, MMMM d, yyyy", java.util.Locale.US).format(now)
+        val sdfTime = java.text.SimpleDateFormat("HH:mm:ss z (Z)", java.util.Locale.US).format(now)
+        parts.add("REAL-WORLD TEMPORAL CONTEXT: Today's current date is $sdfDate, and the current time is $sdfTime. The current year is 2026. Always base any questions about the date, day of the week, holidays, current events, or relative time on this exact real-world context. Never state that you don't know the current date or hallucinate past dates.")
 
         if (userName.isNotEmpty() && userName != "User") {
             parts.add("You are addressing the user named $userName.")

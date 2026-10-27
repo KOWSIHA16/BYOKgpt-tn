@@ -43,6 +43,12 @@ interface ChatDao {
     @Update
     suspend fun updateMessage(message: MessageEntity)
 
+    @Query("UPDATE messages SET userFeedback = :feedback WHERE id = :messageId")
+    suspend fun updateMessageFeedback(messageId: String, feedback: String?)
+
+    @Query("UPDATE messages SET content = :newContent WHERE id = :messageId")
+    suspend fun updateMessageContent(messageId: String, newContent: String)
+
     @Query("DELETE FROM messages WHERE id = :messageId")
     suspend fun deleteMessage(messageId: String)
 

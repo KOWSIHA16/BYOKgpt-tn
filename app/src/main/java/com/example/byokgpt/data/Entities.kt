@@ -43,7 +43,8 @@ data class MessageEntity(
     val attachmentName: String? = null,
     val attachmentMime: String? = null,
     val attachmentBase64: String? = null,
-    val generatedImageUrl: String? = null
+    val generatedImageUrl: String? = null,
+    val userFeedback: String? = null
 )
 
 @Entity(tableName = "memories")

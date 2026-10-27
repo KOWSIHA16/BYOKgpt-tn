@@ -38,6 +38,8 @@ import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
@@ -48,6 +50,10 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.example.byokgpt.security.AppLockManager
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -127,6 +133,28 @@ fun SettingsScreen(
     var editMemoryKey by remember { mutableStateOf("") }
     var editMemoryContent by remember { mutableStateOf("") }
     var showClearMemoriesDialog by remember { mutableStateOf(false) }
+
+    // App Lock & Biometrics states
+    var isAppLockEnabled by remember {
+        mutableStateOf(viewModel.secureKeyStorage.isAppLockEnabled() && viewModel.secureKeyStorage.hasPin())
+    }
+    var isBiometricEnabled by remember {
+        mutableStateOf(viewModel.secureKeyStorage.isBiometricEnabled())
+    }
+    val isBiometricsSupported = remember { AppLockManager.isBiometricsSupported(context) }
+    var showSetPinDialog by remember { mutableStateOf(false) }
+    var showDisablePinDialog by remember { mutableStateOf(false) }
+    var newPinInput by remember { mutableStateOf("") }
+    var confirmPinInput by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf<String?>(null) }
+    var disablePinInput by remember { mutableStateOf("") }
+    var disablePinError by remember { mutableStateOf<String?>(null) }
+
+    // Image Generation Provider state
+    var selectedImageProvider by remember {
+        mutableStateOf(viewModel.secureKeyStorage.getImageGenProvider())
+    }
+    var showImageProviderDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -628,6 +656,121 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // App PIN Lock
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.pin_lock_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = if (isAppLockEnabled) "App locked with 4-digit PIN" else stringResource(R.string.pin_lock_desc),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isAppLockEnabled) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (isAppLockEnabled) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = {
+                                    newPinInput = ""
+                                    confirmPinInput = ""
+                                    pinError = null
+                                    showSetPinDialog = true
+                                }) {
+                                    Text("Change", style = MaterialTheme.typography.labelMedium)
+                                }
+                                TextButton(onClick = {
+                                    disablePinInput = ""
+                                    disablePinError = null
+                                    showDisablePinDialog = true
+                                }) {
+                                    Text("Turn Off", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        } else {
+                            TextButton(onClick = {
+                                newPinInput = ""
+                                confirmPinInput = ""
+                                pinError = null
+                                showSetPinDialog = true
+                            }) {
+                                Text("Set PIN", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    if (isAppLockEnabled && isBiometricsSupported) {
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingSwitchItem(
+                            title = stringResource(R.string.biometric_unlock_title),
+                            subtitle = stringResource(R.string.biometric_unlock_desc),
+                            checked = isBiometricEnabled,
+                            onCheckedChange = { checked ->
+                                isBiometricEnabled = checked
+                                viewModel.secureKeyStorage.setBiometricEnabled(checked)
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Section: Image Generation Engine
+            item {
+                SettingsSectionCard(
+                    title = stringResource(R.string.sec_image_gen),
+                    icon = Icons.Default.Image
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showImageProviderDialog = true }
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Default Image Provider",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = when (selectedImageProvider) {
+                                        "GEMINI" -> "Google Gemini (Imagen 3)"
+                                        "OPENAI" -> "OpenAI (DALL-E 3)"
+                                        else -> "Pollinations.ai (Flux - Free, No Key Required)"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "To generate images, type 'draw ...' or 'generate image of ...'. Anthropic Claude does not support image generation.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -989,6 +1132,210 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showClearMemoriesDialog = false }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Set / Change PIN Dialog
+    if (showSetPinDialog) {
+        AlertDialog(
+            onDismissRequest = { showSetPinDialog = false },
+            title = { Text(if (isAppLockEnabled) "Change 4-Digit PIN" else "Set 4-Digit PIN") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Enter a 4-digit numeric PIN to secure BYOKGPT upon launch and return from background.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = newPinInput,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { char -> char.isDigit() }) {
+                                newPinInput = it
+                                pinError = null
+                            }
+                        },
+                        label = { Text("New PIN (4 digits)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = confirmPinInput,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { char -> char.isDigit() }) {
+                                confirmPinInput = it
+                                pinError = null
+                            }
+                        },
+                        label = { Text("Confirm PIN") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (pinError != null) {
+                        Text(
+                            text = pinError ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newPinInput.length != 4) {
+                            pinError = "PIN must be exactly 4 digits"
+                        } else if (newPinInput != confirmPinInput) {
+                            pinError = "PINs do not match"
+                        } else {
+                            viewModel.secureKeyStorage.setPin(newPinInput)
+                            isAppLockEnabled = true
+                            showSetPinDialog = false
+                            Toast.makeText(context, "PIN configured successfully", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("Save PIN")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSetPinDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Disable PIN Dialog
+    if (showDisablePinDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisablePinDialog = false },
+            title = { Text("Turn Off App PIN Lock") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Please enter your current 4-digit PIN to disable app lock.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = disablePinInput,
+                        onValueChange = {
+                            if (it.length <= 4 && it.all { char -> char.isDigit() }) {
+                                disablePinInput = it
+                                disablePinError = null
+                            }
+                        },
+                        label = { Text("Current 4-digit PIN") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (disablePinError != null) {
+                        Text(
+                            text = disablePinError ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (viewModel.secureKeyStorage.verifyPin(disablePinInput)) {
+                            viewModel.secureKeyStorage.removePin()
+                            isAppLockEnabled = false
+                            showDisablePinDialog = false
+                            Toast.makeText(context, "App lock turned off", Toast.LENGTH_SHORT).show()
+                        } else {
+                            disablePinError = "Incorrect PIN. Try again."
+                        }
+                    }
+                ) {
+                    Text("Disable Lock", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisablePinDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Image Provider Selection Dialog
+    if (showImageProviderDialog) {
+        val providers = listOf(
+            Triple("POLLINATIONS", "Pollinations.ai (Flux)", "Free unlimited generation, high quality, no API key needed"),
+            Triple("GEMINI", "Google Gemini (Imagen 3)", "High fidelity, requires Google Gemini API key configured"),
+            Triple("OPENAI", "OpenAI (DALL-E 3)", "Photorealistic, requires OpenAI API key configured")
+        )
+
+        AlertDialog(
+            onDismissRequest = { showImageProviderDialog = false },
+            title = { Text("Choose Default Image Engine") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    providers.forEach { (code, name, desc) ->
+                        val isSelected = selectedImageProvider == code
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedImageProvider = code
+                                    viewModel.secureKeyStorage.setImageGenProvider(code)
+                                    showImageProviderDialog = false
+                                    Toast.makeText(context, "Default image engine: $name", Toast.LENGTH_SHORT).show()
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = name,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = desc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showImageProviderDialog = false }) {
+                    Text("Close")
                 }
             }
         )

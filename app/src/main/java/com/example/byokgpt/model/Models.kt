@@ -12,7 +12,7 @@ enum class AiProvider(
 ) {
     GEMINI(
         displayName = "Google Gemini",
-        defaultModel = "gemini-3.5-flash",
+        defaultModel = "gemini-3.8-flash",
         defaultEndpoint = "https://generativelanguage.googleapis.com",
         iconResId = R.drawable.gemini,
         apiKeyPlaceholder = "AQ... or AIzaSy...",
@@ -51,12 +51,8 @@ data class AiModel(
 
 object ModelCatalog {
     val models: List<AiModel> = listOf(
-        // Google Gemini (First as selected - verified 2026 active models)
-        AiModel("gemini-3.5-flash", "Gemini 3.5 Flash", AiProvider.GEMINI, "Fast, intelligent flagship multimodal model"),
-        AiModel("gemini-flash-latest", "Gemini Flash (Latest)", AiProvider.GEMINI, "Latest stable fast Gemini model"),
-        AiModel("gemini-3.8-flash", "Gemini 3.8 Flash", AiProvider.GEMINI, "Frontier high-speed thinking model"),
-        AiModel("gemini-2.5-flash", "Gemini 2.5 Flash", AiProvider.GEMINI, "Balanced multimodal reasoning model"),
-        AiModel("gemini-1.5-flash", "Gemini 1.5 Flash (Legacy)", AiProvider.GEMINI, "Legacy model - automatically routed to Gemini 3.5 Flash"),
+        // Google Gemini (Exclusive 2026 Gemini model)
+        AiModel("gemini-3.8-flash", "Gemini 3.8 Flash", AiProvider.GEMINI, "Frontier high-speed thinking multimodal model"),
 
         // Anthropic Claude (Second)
         AiModel("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet", AiProvider.CLAUDE, "Most intelligent Claude model"),
